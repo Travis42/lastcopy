@@ -40,16 +40,20 @@ lastcopy report --md out.md --csv out.csv # RED list first + roll-up + counts
 
 ## Why this exists
 
-Reporting by [404 Media](https://www.404media.co/) (e.g. its July 2026 investigation
-"Company Offering Printed Books to Train AI Stops After 404 Media Report", on ISBNdb
-offering to source up to a million printed books for AI training) and
-[Futurism](https://futurism.com/) (its coverage of bulk buyers shredding rare books
-for AI training data) shows AI companies bulk-buying used books for training data and
-destroying the copies. Rare, out-of-print, foreign-language, and pre-ISBN books get
-pulped alongside the millionth paperback because purchase orders are keyed to ISBNs
-and structurally blind to scarcity. `lastcopy` cross-references candidate editions
-against digital-surrogate existence (and, later, library holdings) and emits the
-shortlist the world might actually lose.
+Reporting shows AI companies bulk-buying used books for training data and destroying
+the copies — destructively scanning them, then shredding the originals. Rare,
+out-of-print, foreign-language, and pre-ISBN books get pulped alongside the
+millionth paperback because purchase orders are keyed to ISBNs and structurally
+blind to scarcity. `lastcopy` cross-references candidate editions against digital-surrogate existence (and, later, library holdings) and emits the shortlist the
+world might actually lose.
+
+Key reporting:
+
+- [404 Media — AI Companies Are Buying Tons of Old Books Because They're Free of "AI Slop"](https://www.404media.co/ai-companies-are-buying-tons-of-old-books-because-theyre-free-of-ai-slop/)
+- [Futurism — AI Companies Are Buying Antique Books, Ingesting Their Contents, and Then Destroying Them at Incredible Scale](https://futurism.com/artificial-intelligence/ai-companies-destroying-rare-books)
+- [Forbes — Are AI Companies Really Buying—And Destroying—Antique Books?](https://www.forbes.com/sites/maryroeloffs/2026/08/17/ai-companies-are-buying-and-destroying-antique-books-heres-why/)
+- [Tom's Hardware — AI companies are reportedly shredding millions of books after using them to train AI models](https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-companies-are-reportedly-shredding-millions-of-books-to-train-models-tech-giants-outsource-to-middlemen-to-secretly-buy-up-books-for-training-material)
+- [NL Times — Rare book dealers fear tech firms destroying obscure editions to train AI models](https://nltimes.nl/2026/06/25/rare-book-dealers-fear-tech-firms-destroying-obscure-editions-train-ai-models)
 
 ## Status
 
