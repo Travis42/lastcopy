@@ -190,9 +190,22 @@ def cmd_report(args) -> int:
     entries = []
     for wk, c in classes.items():
         ed = editions.get(wk)
+        title = ed.title if ed else None
+        author = ed.author if ed else None
+        if not title or not author:  # bare-ISBN lot rows: borrow bib data from OL evidence
+            row = store.conn.execute(
+                "SELECT evidence_json FROM source_hits WHERE work_key=? AND source='ol'",
+                (wk,)).fetchone()
+            if row:
+                try:
+                    ev = json.loads(row["evidence_json"])
+                    title = title or ev.get("title")
+                    author = author or ", ".join(ev.get("authors") or []) or None
+                except json.JSONDecodeError:
+                    pass
         entries.append({
             "work_key": wk, "isbn13": ed.isbn13 if ed else None,
-            "title": ed.title if ed else None, "author": ed.author if ed else None,
+            "title": title, "author": author,
             "year": ed.year if ed else None,
             "cls": c.cls.value, "rule": c.rationale.get("rule"),
             "evidence": _evidence(store, wk, c),

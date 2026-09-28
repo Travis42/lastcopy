@@ -1,0 +1,14 @@
+NOTICE — lastcopy generated outputs
+
+Generated registry outputs produced by lastcopy — including RED lists, CSV/Markdown
+reports, and SQLite database dumps of registry facts — are dedicated to the public
+domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+
+The underlying source data belongs to its respective providers:
+  - Open Library (openlibrary.org) — public domain / CC BY data; see
+    https://openlibrary.org/developers/licensing
+  - Internet Archive (archive.org) items — rights vary per item; evidence URLs are
+    references, not copies
+  - Wikidata (wikidata.org) — CC0
+
+Code is licensed separately under the MIT License (see LICENSE).
