@@ -1,0 +1,325 @@
+"""lastcopy CLI (stdlib argparse): ingest / enrich / classify / report (+ survey, confirm stubs)."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import csv
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+from tqdm import tqdm
+
+from . import __version__
+from .classify import classify_edition
+from .isbn import bib_work_key, normalize_isbn
+from .models import Classification, Cls, Edition, HitStatus, SourceName
+from .net import PoliteClient
+from .store import Store
+from .sources import ia, ol, wikidata
+from .sources.gbooks import KeyRequiredError
+
+KEYLESS_SOURCES = {"ol": ol.check, "ia": ia.check, "wd": wikidata.check}
+STUB_SOURCES = {"gb": "Google Books", "ht": "HathiTrust", "loc": "LoC SRU"}
+
+
+# ---------------------------------------------------------------- ingest
+def cmd_ingest(args) -> int:
+    store = Store(args.db)
+    run_id = store.start_run("ingest")
+    rows = list(csv.DictReader(open(args.csv, newline="", encoding="utf-8-sig")))
+    n_isbn = n_bib = n_invalid = 0
+    for raw in rows:
+        row = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
+        title, author = row.get("title"), row.get("author")
+        year = _to_year(row.get("year"))
+        isbn_raw = row.get("isbn") or row.get("isbn13") or row.get("isbn10") or ""
+        norm = normalize_isbn(isbn_raw) if isbn_raw else None
+        if norm and not args.bib_mode:
+            isbn13, isbn10 = norm
+            ed = Edition(work_key=isbn13, isbn13=isbn13, isbn10=isbn10,
+                         title=title, author=author, year=year,
+                         publisher=row.get("publisher"),
+                         imprint_place=row.get("place") or row.get("imprint_place"),
+                         language=row.get("language"), origin_note="csv")
+            n_isbn += 1
+            for src in KEYLESS_SOURCES:
+                store.enqueue(ed.work_key, src)
+        elif isbn_raw and not norm and not args.bib_mode:
+            n_invalid += 1  # invalid checksum/length -> falls to bib-stub path
+        if (not norm or args.bib_mode) and title and author is not None:
+            note = "bib-mode" if args.bib_mode else (
+                "bib-stub:invalid-isbn" if isbn_raw else "bib-stub:no-isbn")
+            ed = Edition(work_key=bib_work_key(title, author, year),
+                         title=title, author=author, year=year,
+                         publisher=row.get("publisher"),
+                         imprint_place=row.get("place") or row.get("imprint_place"),
+                         language=row.get("language"), origin_note=note)
+            n_bib += 1
+            store.enqueue(ed.work_key, "bib-stub")  # D1: queued only, never resolved in M1
+        store.upsert_edition(ed)
+    store.finish_run(run_id, {"rows": len(rows), "isbn": n_isbn, "bib_stub": n_bib,
+                              "invalid_isbn": n_invalid})
+    print(f"ingested {len(rows)} rows: {n_isbn} ISBN-keyed, {n_bib} bib-stub "
+          f"({n_invalid} invalid-ISBN fallbacks)")
+    store.close()
+    return 0
+
+
+# ---------------------------------------------------------------- enrich
+async def _enrich(args) -> int:
+    store = Store(args.db)
+    run_id = store.start_run("enrich")
+    sources = [s.strip() for s in args.source.split(",") if s.strip()]
+    for s in sources:
+        if s in STUB_SOURCES:
+            print(f"error: source '{s}' ({STUB_SOURCES[s]}) requires a key — "
+                  "scaffolded only, wiring lands in M3 (SPEC D2)", file=sys.stderr)
+            store.close()
+            return 2
+        if s not in KEYLESS_SOURCES:
+            print(f"error: unknown source '{s}'", file=sys.stderr)
+            store.close()
+            return 2
+
+    client = PoliteClient(store)
+    sem = asyncio.Semaphore(args.workers)
+    totals: Counter = Counter()
+    editions = store.all_editions()
+
+    # OL must run before IA (IA's oclc: fallback reads OL evidence); WD order-free.
+    for src in [s for s in ("ol", "ia", "wd") if s in sources]:
+        check = KEYLESS_SOURCES[src]
+        items = store.pending(src)
+        if not items:
+            continue
+
+        async def one(row):
+            async with sem:
+                work_key = row["work_key"]
+                ed = next((e for e in editions if e.work_key == work_key), None)
+                if ed is None:
+                    store.queue_mark(work_key, src, "error", "edition vanished")
+                    return
+                try:
+                    out = await check(ed, client, store)
+                    hit, surrogates = out if isinstance(out, tuple) else (out, [])
+                    store.save_hit(hit)
+                    if surrogates:
+                        store.save_surrogates(work_key, surrogates)
+                    store.queue_mark(work_key, src, "done")
+                    totals[hit.status.value] += 1
+                except KeyRequiredError:
+                    raise
+                except Exception as exc:  # leave pending -> resumable after crash
+                    store.queue_mark(work_key, src, "pending", str(exc)[:500])
+                    totals["error"] += 1
+
+        for row in tqdm(items, desc=f"enrich:{src}", unit="ed"):
+            await one(row)
+
+    await client.aclose()
+    store.finish_run(run_id, {"sources": sources, **dict(totals)})
+    print(f"enrich done: {dict(totals)} (queue resumable; cache TTL 30d)")
+    store.close()
+    return 0
+
+
+def cmd_enrich(args) -> int:
+    return asyncio.run(_enrich(args))
+
+
+# ---------------------------------------------------------------- classify
+def cmd_classify(args) -> int:
+    store = Store(args.db)
+    run_id = store.start_run("classify")
+    counts: Counter = Counter()
+    for ed in store.all_editions():
+        surrogates = store.surrogates_for(ed.work_key)
+        rarity = store.rarity_for(ed.work_key)
+        statuses = {
+            r["source"]: r["status"]
+            for r in store.conn.execute(
+                "SELECT source, status FROM source_hits WHERE work_key=?", (ed.work_key,))
+        }
+        c = classify_edition(ed, surrogates, rarity, statuses)
+        store.save_classification(c)
+        counts[c.cls.value] += 1
+    store.finish_run(run_id, dict(counts))
+    print("classified: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    store.close()
+    return 0
+
+
+# ---------------------------------------------------------------- report
+def _work_group(store: Store, ed: Edition) -> str:
+    row = store.conn.execute(
+        "SELECT evidence_json FROM source_hits WHERE work_key=? AND source='ol'",
+        (ed.work_key,)).fetchone()
+    if row:
+        try:
+            wk = json.loads(row["evidence_json"]).get("ol_work_key")
+            if wk:
+                return wk
+        except json.JSONDecodeError:
+            pass
+    key = f"{(ed.title or '').lower().strip()}|{(ed.author or '').lower().strip()}"
+    return key or ed.work_key
+
+
+def _evidence(store: Store, work_key: str, cls_row: Classification) -> list[str]:
+    urls = list(cls_row.evidence_urls)
+    for s in store.surrogates_for(work_key):
+        if s.url not in urls:
+            urls.append(s.url)
+    return urls
+
+
+def cmd_report(args) -> int:
+    store = Store(args.db)
+    run_id = store.start_run("report")
+    editions = {e.work_key: e for e in store.all_editions()}
+    classes = {c.work_key: c for c in store.all_classifications()}
+    order = [Cls.RED.value, Cls.RED_UNVERIFIED.value, Cls.AMBER.value,
+             Cls.UNKNOWN.value, Cls.GREEN.value]
+    entries = []
+    for wk, c in classes.items():
+        ed = editions.get(wk)
+        entries.append({
+            "work_key": wk, "isbn13": ed.isbn13 if ed else None,
+            "title": ed.title if ed else None, "author": ed.author if ed else None,
+            "year": ed.year if ed else None,
+            "cls": c.cls.value, "rule": c.rationale.get("rule"),
+            "evidence": _evidence(store, wk, c),
+        })
+    entries.sort(key=lambda e: (order.index(e["cls"]), e["title"] or ""))
+    counts = Counter(e["cls"] for e in entries)
+
+    groups: dict[str, list] = {}
+    for e in entries:
+        groups.setdefault(_work_group(store, editions[e["work_key"]]), []).append(e)
+
+    if args.csv:
+        _write_csv(args.csv, entries)
+    md = _render_md(entries, groups, counts)
+    if args.md:
+        Path(args.md).write_text(md, encoding="utf-8")
+    print(md)
+    store.finish_run(run_id, {"entries": len(entries), "counts": dict(counts)})
+    store.close()
+    return 0
+
+
+def _write_csv(path: str, entries: list[dict]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["work_key", "isbn13", "title", "author", "year", "class",
+                    "rule", "evidence_urls"])
+        for e in entries:
+            w.writerow([e["work_key"], e["isbn13"], e["title"], e["author"], e["year"],
+                        e["cls"], e["rule"], ";".join(e["evidence"])])
+
+
+def _render_md(entries, groups, counts) -> str:
+    lines = ["# lastcopy report", ""]
+    lines.append(f"{len(entries)} editions classified: "
+                 + ", ".join(f"{k}={counts[k]}" for k in
+                             [c.value for c in Cls] if counts.get(k)) + "")
+    lines.append("")
+    red = [e for e in entries if e["cls"] in (Cls.RED.value, Cls.RED_UNVERIFIED.value)]
+    lines.append(f"## RED list — act before shipping ({len(red)})")
+    lines.append("")
+    lines.append("| class | title | author | year | isbn | rationale | evidence |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for e in red:
+        lines.append(f"| {e['cls']} | {e['title']} | {e['author']} | {e['year']} "
+                     f"| {e['isbn13']} | {e['rule']} | {'; '.join(e['evidence']) or '—'} |")
+    lines.append("")
+    lines.append("## Roll-up per work")
+    lines.append("")
+    lines.append("| work | editions | classes | evidence |")
+    lines.append("|---|---|---|---|")
+    for g, es in sorted(groups.items()):
+        ev: list[str] = []
+        for e in es:
+            for u in e["evidence"]:
+                if u not in ev:
+                    ev.append(u)
+        lines.append(f"| {(es[0]['title'] or g)} — {(es[0]['author'] or '?')} "
+                     f"| {len(es)} | {','.join(e['cls'] for e in es)} "
+                     f"| {'; '.join(ev[:5]) or '—'} |")
+    lines.append("")
+    lines.append("## Counts by class")
+    lines.append("")
+    for c in Cls:
+        lines.append(f"- {c.value}: {counts.get(c.value, 0)}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- stubs
+def cmd_survey(args) -> int:
+    print("survey is M2 (stretch) — see SPEC milestones", file=sys.stderr)
+    return 2
+
+
+def cmd_confirm(args) -> int:
+    print("confirm is M3 (needs OCLC WSKey / manual annotation workflow)", file=sys.stderr)
+    return 2
+
+
+# ---------------------------------------------------------------- main
+def _to_year(v):
+    try:
+        return int(str(v)[:4]) if v else None
+    except ValueError:
+        return None
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="lastcopy",
+        description="Last-copy registry: flag editions with no accessible digital "
+                    "surrogate and few surviving copies.")
+    p.add_argument("--version", action="version", version=f"lastcopy {__version__}")
+    p.add_argument("--db", default="lastcopy.db", help="SQLite store path")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sp = sub.add_parser("ingest", help="load a candidate-lot CSV (ISBN or bib rows)")
+    sp.add_argument("--csv", required=True)
+    sp.add_argument("--bib-mode", action="store_true",
+                    help="key rows on title|author|year (pre-ISBN bib stubs, D1)")
+    sp.set_defaults(fn=cmd_ingest)
+
+    sp = sub.add_parser("enrich", help="check sources for digital surrogates")
+    sp.add_argument("--workers", type=int, default=4)
+    sp.add_argument("--source", default="ol,ia,wd",
+                    help="comma list: ol,ia,wd (keyless M1); gb,ht need keys (M3)")
+    sp.set_defaults(fn=cmd_enrich)
+
+    sp = sub.add_parser("classify", help="apply the classification matrix")
+    sp.set_defaults(fn=cmd_classify)
+
+    sp = sub.add_parser("report", help="RED list + counts + roll-up")
+    sp.add_argument("--md")
+    sp.add_argument("--csv")
+    sp.set_defaults(fn=cmd_report)
+
+    sp = sub.add_parser("survey", help="random OL sample -> %% no-surrogate + Wilson CI (M2)")
+    sp.set_defaults(fn=cmd_survey)
+    sp = sub.add_parser("confirm", help="manual OCLC/BookFinder annotations in (M3)")
+    sp.set_defaults(fn=cmd_confirm)
+    return p
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    if not hasattr(args, "fn"):
+        return 2
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

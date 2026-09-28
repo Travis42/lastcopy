@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lastcopy"
+version = "0.1.0"
+description = "Last-copy registry: flag editions with no accessible digital surrogate and few surviving copies"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "lastcopy contributors" }]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+lastcopy = "lastcopy.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lastcopy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
