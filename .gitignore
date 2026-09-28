@@ -5,3 +5,4 @@ __pycache__/
 lastcopy.db
 lastcopy.sqlite*
 *.log
+.venv/
