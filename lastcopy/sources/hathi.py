@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from .gbooks import KeyRequiredError
 
-KEY_URL = "https://www.hathitrust.org/member-libraries/hathitrust-api-terms/"
+KEY_URL = "https://www.hathitrust.org/member-libraries/resources-for-librarians/data-resources/bibliographic-api/"
 
 
 async def check(*args, **kwargs):
