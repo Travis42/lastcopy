@@ -50,6 +50,10 @@ roll-up per work, counts by class).
 
 ## Notes
 
+- **M2 stretch also landed:** `lastcopy --db survey.db survey --sample 15 --from 1930
+  --to 1950` produced `all: n=15, no-surrogate 9 (60.0%), Wilson 95% CI [35.7%, 80.2%]`
+  (see `docs/survey-sample.md`).
+
 - "To Kill a Mockingbird" came out GREEN via an IA **lending** scan
   (`tokillmockingbir0000leeh_m6b3`) — per the matrix row 1, an IA lending scan is a
   public surrogate: a copy survives and is accessible (controlled digital lending),

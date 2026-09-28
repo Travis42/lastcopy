@@ -34,13 +34,13 @@ def _make_client(store, router):
 
 
 def _ol_sample_body(n_docs: int, year: int, idx_offset: int = 0) -> str:
-    # shape-faithful to OL search.json: docs[] with isbn13[], title, first_publish_year
+    # shape-faithful to OL search.json: docs[] with isbn[], title, first_publish_year
     docs = []
     for i in range(idx_offset, idx_offset + n_docs):
         core = f"978{i:09d}"
         total = sum(int(c) * (1 if j % 2 == 0 else 3) for j, c in enumerate(core))
         isbn = core + str((10 - total % 10) % 10)
-        docs.append({"isbn13": [isbn], "title": f"Book {i}",
+        docs.append({"isbn": [isbn], "title": f"Book {i}",
                      "author_name": [f"Author {i}"], "first_publish_year": year})
     return json.dumps({"numFound": len(docs), "docs": docs})
 
@@ -88,7 +88,7 @@ def test_survey_split_pre_post_1927(tmp_path):
     router = Router().add_default("ia_miss", host="archive.org")
     router.add_default("wd_miss", host="query.wikidata.org")
     router.add(lambda req, p: req.url.host == "openlibrary.org", (200, body))
-    ia_green_isbn = post["docs"][0]["isbn13"][0]
+    ia_green_isbn = post["docs"][0]["isbn"][0]
     ia_hit = load("ia_hit")
     router.routes.insert(0, (
         lambda req, p: req.url.host == "archive.org" and ia_green_isbn in str(p.get("q", "")),

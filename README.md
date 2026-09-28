@@ -55,8 +55,9 @@ shortlist the world might actually lose.
 
 - **M1 (done):** keyless OL + IA + Wikidata chain end-to-end, RED-list CSV/MD report,
   full test suite (`python3 -m pytest tests/ -q`).
-- **M2 (stretch):** `lastcopy survey` — random OL sample → "% no accessible digital
-  surrogate" + Wilson CI, split pre/post 1927.
+- **M2 (done, stretch):** `lastcopy survey --sample N --from Y1 --to Y2` — random OL
+  sample → "% no accessible digital surrogate" + Wilson 95% CI, split pre/post 1927
+  (see `docs/survey-sample.md` for a live 15-book run).
 - **M3 (later):** Google Books / HathiTrust / OCLC keys wired; confirm workflow;
   public dashboard.
 

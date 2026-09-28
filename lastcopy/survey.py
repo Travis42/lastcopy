@@ -39,7 +39,7 @@ async def draw_sample(client: PoliteClient, store: Store, sample_n: int,
         if len(editions) >= sample_n:
             break
         resp = await client.get(SAMPLE_URL, {
-            "q": q, "fields": "isbn13,title,author_name,first_publish_year",
+            "q": q, "fields": "isbn,title,author_name,first_publish_year",
             "sort": "random", "limit": min(sample_n * 2, 500),
             "offset": page * min(sample_n * 2, 500)})
         if not resp.ok:
@@ -51,7 +51,7 @@ async def draw_sample(client: PoliteClient, store: Store, sample_n: int,
         if not docs:
             break
         for d in docs:
-            for raw in d.get("isbn13") or []:
+            for raw in d.get("isbn") or []:
                 norm = normalize_isbn(raw)
                 if not norm:
                     continue
