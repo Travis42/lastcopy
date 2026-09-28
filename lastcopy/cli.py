@@ -357,7 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--csv")
     sp.set_defaults(fn=cmd_report)
 
-    sp = sub.add_parser("survey", help="random OL sample -> % no-surrogate + Wilson CI (M2)")
+    sp = sub.add_parser("survey", help="random OL sample -> %% no-surrogate + Wilson CI (M2)")
     sp.add_argument("--sample", type=int, default=5000)
     sp.add_argument("--from", dest="from_year", type=int, default=1900)
     sp.add_argument("--to", dest="to_year", type=int, default=1980)
