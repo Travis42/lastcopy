@@ -1,0 +1,44 @@
+{
+  "ol_search_hit": {
+    "url": "https://openlibrary.org/search.json?q=isbn%3A9780140328721&fields=title%2Cauthor_name%2Ckey%2Cedition_count%2Coclc_numbers%2Cfirst_publish_year%2Cpublisher%2Clanguage%2Cia&limit=20",
+    "status": 200
+  },
+  "ol_search_miss": {
+    "url": "https://openlibrary.org/search.json?q=isbn%3A9780957535068&fields=title%2Cauthor_name%2Ckey&limit=5",
+    "status": 200
+  },
+  "ol_error": {
+    "url": "https://openlibrary.org/search.json?limit=5",
+    "status": 200
+  },
+  "ol_editions_hit": {
+    "url": "https://openlibrary.org/works/OL45804W/editions.json?page=1",
+    "status": 200
+  },
+  "ia_hit": {
+    "url": "https://archive.org/advancedsearch.php?q=isbn%3A9780140328721+OR+isbn%3A0140328726&rows=50&output=json&fl%5B0%5D=identifier&fl%5B1%5D=title&fl%5B2%5D=collection&fl%5B3%5D=year&fl%5B4%5D=creator",
+    "status": 200
+  },
+  "ia_miss": {
+    "url": "https://archive.org/advancedsearch.php?q=isbn%3A9780957535068&rows=50&output=json&fl%5B0%5D=identifier&fl%5B1%5D=collection",
+    "status": 200
+  },
+  "ia_error": {
+    "url": "https://archive.org/advancedsearch.php?q=isbn%3A%28&rows=5&output=json",
+    "status": 200
+  },
+  "wd_hit": {
+    "url": "https://query.wikidata.org/sparql?format=json&query=SELECT+%3Fed+%3Fwork+%3Ffulltext+%3Fpg+WHERE+%7B+%3Fed+wdt%3AP212%7Cwdt%3AP957+%3Fraw+.+FILTER%28REPLACE%28%3Fraw%2C+%22-%22%2C+%22%22%29+%3D+%229780486417783%22%29+OPTIONAL+%7B+%3Fed+wdt%3AP629+%3Fwork+%7D+OPTIONAL+%7B+%3Fed+wdt%3AP953+%3Ffulltext+%7D+OPTIONAL+%7B+%3Fwork+wdt%3AP953+%3Ffulltext+%7D+OPTIONAL+%7B+%3Fed+wdt%3AP2034+%3Fpg+%7D+OPTIONAL+%7B+%3Fwork+wdt%3AP2034+%3Fpg+%7D+%7D+LIMIT+50+OFFSET+0",
+    "status": 200,
+    "isbn": "9780486417783",
+    "note": "norm-query (hyphenated P212)"
+  },
+  "wd_miss": {
+    "url": "https://query.wikidata.org/sparql?format=json&query=SELECT+%3Fed+%3Fwork+%3Ffulltext+WHERE+%7B+VALUES+%3Fisbn+%7B+%229780060935467%22+%7D+%3Fed+wdt%3AP212%7Cwdt%3AP957+%3Fisbn+.+OPTIONAL+%7B+%3Fed+wdt%3AP629+%3Fwork+%7D+OPTIONAL+%7B+%3Fed+wdt%3AP2034+%3Ffulltext+%7D+OPTIONAL+%7B+%3Fwork+wdt%3AP2034+%3Ffulltext+%7D+%7D+LIMIT+50+OFFSET+0",
+    "status": 200
+  },
+  "wd_error": {
+    "url": "https://query.wikidata.org/sparql?format=json&query=SELECT+WHERE+%7B+%3F%3F%3F+%7D",
+    "status": 400
+  }
+}

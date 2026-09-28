@@ -1,0 +1,25 @@
+{
+  "head" : {
+    "vars" : [ "ed", "work", "fulltext", "pg" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "ed" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q116210678"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q476871"
+      },
+      "fulltext" : {
+        "type" : "uri",
+        "value" : "https://gutenberg.org/ebooks/215"
+      },
+      "pg" : {
+        "type" : "literal",
+        "value" : "215"
+      }
+    } ]
+  }
+}

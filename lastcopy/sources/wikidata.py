@@ -12,12 +12,26 @@ SPARQL_URL = "https://query.wikidata.org/sparql"
 PAGE_SIZE = 50  # LIMIT/OFFSET pagination
 MAX_PAGES = 4
 
-QUERY_TEMPLATE = """SELECT ?ed ?work ?fulltext WHERE {{
-  VALUES ?isbn { "{isbn}" }
+QUERY_TEMPLATE = """SELECT ?ed ?work ?fulltext ?pg WHERE {{
+  VALUES ?isbn {{ "{isbn}" }}
   ?ed wdt:P212|wdt:P957 ?isbn .
   OPTIONAL {{ ?ed wdt:P629 ?work }}
-  OPTIONAL {{ ?ed wdt:P2034 ?fulltext }}
-  OPTIONAL {{ ?work wdt:P2034 ?fulltext }}
+  OPTIONAL {{ ?ed wdt:P953 ?fulltext }}
+  OPTIONAL {{ ?work wdt:P953 ?fulltext }}
+  OPTIONAL {{ ?ed wdt:P2034 ?pg }}
+  OPTIONAL {{ ?work wdt:P2034 ?pg }}
+}} LIMIT {limit} OFFSET {offset}"""
+
+# Wikidata often stores P212 hyphenated; exact VALUES misses those, so a second
+# normalized-match pass is required (edge case: hyphenated ISBN-13s).
+QUERY_NORM_TEMPLATE = """SELECT ?ed ?work ?fulltext ?pg WHERE {{
+  ?ed wdt:P212|wdt:P957 ?raw .
+  FILTER(REPLACE(?raw, "-", "") = "{isbn}")
+  OPTIONAL {{ ?ed wdt:P629 ?work }}
+  OPTIONAL {{ ?ed wdt:P953 ?fulltext }}
+  OPTIONAL {{ ?work wdt:P953 ?fulltext }}
+  OPTIONAL {{ ?ed wdt:P2034 ?pg }}
+  OPTIONAL {{ ?work wdt:P2034 ?pg }}
 }} LIMIT {limit} OFFSET {offset}"""
 
 
@@ -41,12 +55,17 @@ async def check(edition: Edition, client: PoliteClient, store) -> tuple[SourceHi
     isbns = [v for v in (edition.isbn13, edition.isbn10) if v]
     bindings: list[dict] = []
     endpoint_ok = False
-    for isbn in isbns:
+    # Query strategies in order: exact VALUES per ISBN flavor, then a
+    # hyphen-normalized pass on ISBN-13 (Wikidata P212 values are often hyphenated).
+    strategies = [(QUERY_TEMPLATE, i) for i in isbns]
+    if edition.isbn13:
+        strategies.append((QUERY_NORM_TEMPLATE, edition.isbn13))
+    for template, isbn in strategies:
         for page in range(MAX_PAGES):
             resp = await client.get(SPARQL_URL, {
                 "format": "json",
-                "query": QUERY_TEMPLATE.format(isbn=isbn, limit=PAGE_SIZE,
-                                               offset=page * PAGE_SIZE),
+                "query": template.format(isbn=isbn, limit=PAGE_SIZE,
+                                         offset=page * PAGE_SIZE),
             })
             if not resp.ok:
                 break  # transport/429/error: stop paging this ISBN
@@ -58,8 +77,10 @@ async def check(edition: Edition, client: PoliteClient, store) -> tuple[SourceHi
             bindings.extend(batch)
             if len(batch) < PAGE_SIZE:
                 break
-        if bindings or endpoint_ok:
-            break  # first ISBN flavor answered by the endpoint wins
+        if bindings:
+            break  # first strategy with hits wins
+        if endpoint_ok:
+            continue  # endpoint answered, zero rows: try next strategy/flavor
 
     if not endpoint_ok:
         return SourceHit(work_key=edition.work_key, source=SourceName.wd,
@@ -71,15 +92,19 @@ async def check(edition: Edition, client: PoliteClient, store) -> tuple[SourceHi
     urls: list[str] = []
     seen: set[str] = set()
     for b in bindings:
-        ft = b.get("fulltext", {}).get("value")
-        if not ft or ft in seen:
-            continue
-        seen.add(ft)
-        hits.append(Surrogate(work_key=edition.work_key,
-                              provider=provider_for_url(ft),
-                              access=SurrogateAccess.public,
-                              identifier=ft, url=ft))
-        urls.append(ft)
+        candidates = [b.get("fulltext", {}).get("value")]
+        pg = b.get("pg", {}).get("value")
+        if pg:
+            candidates.append(f"https://www.gutenberg.org/ebooks/{pg}")
+        for ft in candidates:
+            if not ft or ft in seen:
+                continue
+            seen.add(ft)
+            hits.append(Surrogate(work_key=edition.work_key,
+                                  provider=provider_for_url(ft),
+                                  access=SurrogateAccess.public,
+                                  identifier=ft, url=ft))
+            urls.append(ft)
     return SourceHit(work_key=edition.work_key, source=SourceName.wd,
                      status=HitStatus.ok,
                      evidence_json={"isbns": isbns, "num_bindings": len(bindings),
