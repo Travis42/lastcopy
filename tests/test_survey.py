@@ -90,8 +90,9 @@ def test_survey_split_pre_post_1927(tmp_path):
     router.add(lambda req, p: req.url.host == "openlibrary.org", (200, body))
     ia_green_isbn = post["docs"][0]["isbn13"][0]
     ia_hit = load("ia_hit")
-    router.add(lambda req, p: req.url.host == "archive.org" and ia_green_isbn in str(p.get("q", "")),
-               (200, ia_hit))
+    router.routes.insert(0, (
+        lambda req, p: req.url.host == "archive.org" and ia_green_isbn in str(p.get("q", "")),
+        (200, ia_hit)))
     client = _make_client(store, router)
 
     editions = asyncio.run(survey.draw_sample(client, store, 8, 1900, 1960))
