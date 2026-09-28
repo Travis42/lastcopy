@@ -8,8 +8,9 @@
     "status": 200
   },
   "ol_error": {
-    "url": "https://openlibrary.org/search.json?limit=5",
-    "status": 200
+    "url": "https://openlibrary.org/search.json/nope/does-not-exist",
+    "status": 404,
+    "note": "real 404 HTML body"
   },
   "ol_editions_hit": {
     "url": "https://openlibrary.org/works/OL45804W/editions.json?page=1",

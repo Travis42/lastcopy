@@ -7,6 +7,10 @@ import json
 import sqlite3
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from datetime import datetime, timezone
+
 
 from . import CACHE_TTL_DAYS
 from .models import (

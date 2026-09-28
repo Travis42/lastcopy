@@ -33,10 +33,11 @@ def cmd_ingest(args) -> int:
     n_isbn = n_bib = n_invalid = 0
     for raw in rows:
         row = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
-        title, author = row.get("title"), row.get("author")
+        title, author = row.get("title"), row.get("author") or ""
         year = _to_year(row.get("year"))
         isbn_raw = row.get("isbn") or row.get("isbn13") or row.get("isbn10") or ""
         norm = normalize_isbn(isbn_raw) if isbn_raw else None
+        ed = None
         if norm and not args.bib_mode:
             isbn13, isbn10 = norm
             ed = Edition(work_key=isbn13, isbn13=isbn13, isbn10=isbn10,
@@ -49,7 +50,7 @@ def cmd_ingest(args) -> int:
                 store.enqueue(ed.work_key, src)
         elif isbn_raw and not norm and not args.bib_mode:
             n_invalid += 1  # invalid checksum/length -> falls to bib-stub path
-        if (not norm or args.bib_mode) and title and author is not None:
+        if (not norm or args.bib_mode) and title:
             note = "bib-mode" if args.bib_mode else (
                 "bib-stub:invalid-isbn" if isbn_raw else "bib-stub:no-isbn")
             ed = Edition(work_key=bib_work_key(title, author, year),
@@ -59,6 +60,8 @@ def cmd_ingest(args) -> int:
                          language=row.get("language"), origin_note=note)
             n_bib += 1
             store.enqueue(ed.work_key, "bib-stub")  # D1: queued only, never resolved in M1
+        if ed is None:
+            continue  # nothing usable in this row
         store.upsert_edition(ed)
     store.finish_run(run_id, {"rows": len(rows), "isbn": n_isbn, "bib_stub": n_bib,
                               "invalid_isbn": n_invalid})

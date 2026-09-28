@@ -38,10 +38,15 @@ async def check(edition: Edition, client: PoliteClient, store) -> tuple[SourceHi
             unavail_seen = True
             continue
         try:
-            docs = json.loads(resp.body).get("response", {}).get("docs", [])
-        except (json.JSONDecodeError, AttributeError):
+            data = json.loads(resp.body)
+        except json.JSONDecodeError:
             unavail_seen = True
             continue
+        if "error" in data or "response" not in data:
+            # IA returns HTTP 200 with an {"error": ...} body on bad queries
+            unavail_seen = True
+            continue
+        docs = data.get("response", {}).get("docs", [])
         ok_seen = True
         for d in docs:
             ident = d.get("identifier")
