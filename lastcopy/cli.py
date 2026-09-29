@@ -299,37 +299,70 @@ def _render_md(entries, groups, counts) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------- survey (M2)
+# ---------------------------------------------------------------- survey (M3.2)
 def cmd_survey(args) -> int:
     from . import survey as survey_mod
+
+    # Survey default sources = ia,gb (SPEC M3.2; wd optional ~3x wall cost).
+    if args.source is None:
+        sources = ["ia"]
+        if gbooks.resolve_key():
+            sources.append("gb")
+        else:
+            print("note: gb omitted from survey sources (no Google Books key; "
+                  f"set {gbooks.KEY_ENV} or create {gbooks.KEY_FILE})",
+                  file=sys.stderr)
+    else:
+        sources = [s.strip() for s in args.source.split(",") if s.strip()]
+        bad = [s for s in sources if s not in ("ia", "wd", "gb")]
+        if bad:
+            print(f"error: survey sources must be ia,wd,gb — got {','.join(bad)}",
+                  file=sys.stderr)
+            return 2
+        # explicit --source gb without a key raises (never silently skips an ask)
+        if "gb" in sources and not gbooks.resolve_key():
+            raise gbooks.no_key_error()
 
     async def _run() -> dict:
         store = Store(args.db)
         run_id = store.start_run("survey")
         client = PoliteClient(store)
-        editions = await survey_mod.draw_sample(client, store, args.sample,
-                                                args.from_year, args.to_year)
-        await _enrich_survey(client, store)
+        editions = await survey_mod.draw_sample(
+            client, store, args.sample, args.from_year, args.to_year,
+            sources=sources, query_filter=args.survey_filter)
+        totals = await _enrich_survey(client, store, sources)
         await client.aclose()
+        if args.rows:
+            survey_mod.write_rows(args.rows, store, editions)
         report = survey_mod.summarize(store, editions)
+        report["enrich"] = dict(totals)
         store.finish_run(run_id, report)
         store.close()
         return report
 
-    async def _enrich_survey(client, store):
-        for src in ("ia", "wd"):
+    async def _enrich_survey(client, store, sources):
+        totals: Counter = Counter()
+        editions = {e.work_key: e for e in store.all_editions()}
+        for src in sources:
             check = SOURCE_CHECKS[src]
-            editions = store.all_editions()
-            for row in store.pending(src):
-                ed = next((e for e in editions if e.work_key == row["work_key"]), None)
+            for row in tqdm(store.pending(src), desc=f"survey:{src}", unit="ed"):
+                ed = editions.get(row["work_key"])
                 if ed is None:
                     continue
-                out = await check(ed, client, store)
-                hit, surrogates = out if isinstance(out, tuple) else (out, [])
-                store.save_hit(hit)
-                if surrogates:
-                    store.save_surrogates(ed.work_key, surrogates)
-                store.queue_mark(ed.work_key, src, "done")
+                try:
+                    out = await check(ed, client, store)
+                    hit, surrogates = out if isinstance(out, tuple) else (out, [])
+                    store.save_hit(hit)
+                    if surrogates:
+                        store.save_surrogates(ed.work_key, surrogates)
+                    store.queue_mark(ed.work_key, src, "done")
+                    totals[hit.status.value] += 1
+                except KeyRequiredError:
+                    raise
+                except Exception as exc:  # stay resumable; row classifies UNKNOWN
+                    store.queue_mark(ed.work_key, src, "error", str(exc)[:500])
+                    totals["error"] += 1
+        return totals
 
     report = asyncio.run(_run())
     text = survey_mod.render(report)
@@ -382,10 +415,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--csv")
     sp.set_defaults(fn=cmd_report)
 
-    sp = sub.add_parser("survey", help="random OL sample -> %% no-surrogate + Wilson CI (M2)")
+    sp = sub.add_parser("survey", help="random OL sample -> %% no-surrogate + Wilson CI (M3.2)")
     sp.add_argument("--sample", type=int, default=5000)
     sp.add_argument("--from", dest="from_year", type=int, default=1900)
     sp.add_argument("--to", dest="to_year", type=int, default=1980)
+    sp.add_argument("--source", default=None,
+                    help="survey sources: ia,wd,gb (default ia,gb when a gb key resolves)")
+    sp.add_argument("--filter", dest="survey_filter", default=None,
+                    help="appended to the OL query, e.g. 'language:por'")
+    sp.add_argument("--rows",
+                    help="write the citable per-row dataset CSV to this path")
     sp.add_argument("--md")
     sp.set_defaults(fn=cmd_survey)
     sp = sub.add_parser("confirm", help="manual OCLC/BookFinder annotations in (M3)")

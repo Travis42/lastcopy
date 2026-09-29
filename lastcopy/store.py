@@ -27,7 +27,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS editions (
   work_key TEXT PRIMARY KEY,
   isbn13 TEXT, isbn10 TEXT, title TEXT, author TEXT, year INTEGER,
-  publisher TEXT, imprint_place TEXT, language TEXT, origin_note TEXT
+  publisher TEXT, imprint_place TEXT, language TEXT, origin_note TEXT,
+  edition_count INTEGER
 );
 CREATE TABLE IF NOT EXISTS source_hits (
   work_key TEXT, source TEXT, status TEXT, checked_at TEXT, evidence_json TEXT,
@@ -75,7 +76,17 @@ class Store:
         self.conn.execute("PRAGMA journal_mode=WAL")  # crash-safe
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Nullable-column additions, safe on existing DBs (SPEC M3.2): pragma
+        column-check + ALTER TABLE; CREATE TABLE only covers fresh DBs."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(editions)")}
+        if "edition_count" not in cols:
+            self.conn.execute("ALTER TABLE editions ADD COLUMN edition_count INTEGER")
+        if "language" not in cols:
+            self.conn.execute("ALTER TABLE editions ADD COLUMN language TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -100,15 +111,17 @@ class Store:
     def upsert_edition(self, ed: Edition) -> None:
         self.conn.execute(
             """INSERT INTO editions (work_key, isbn13, isbn10, title, author, year,
-                                     publisher, imprint_place, language, origin_note)
-               VALUES (?,?,?,?,?,?,?,?,?,?)
-               ON CONFLICT(work_key) DO UPDATE SET
-                 isbn13=excluded.isbn13, isbn10=excluded.isbn10, title=excluded.title,
-                 author=excluded.author, year=excluded.year, publisher=excluded.publisher,
-                 imprint_place=excluded.imprint_place, language=excluded.language,
-                 origin_note=excluded.origin_note""",
+                                     publisher, imprint_place, language, origin_note,
+                                     edition_count)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
+             ON CONFLICT(work_key) DO UPDATE SET
+                  isbn13=excluded.isbn13, isbn10=excluded.isbn10, title=excluded.title,
+                  author=excluded.author, year=excluded.year, publisher=excluded.publisher,
+                  imprint_place=excluded.imprint_place, language=excluded.language,
+                  origin_note=excluded.origin_note, edition_count=excluded.edition_count""",
             (ed.work_key, ed.isbn13, ed.isbn10, ed.title, ed.author, ed.year,
-             ed.publisher, ed.imprint_place, ed.language, ed.origin_note),
+             ed.publisher, ed.imprint_place, ed.language, ed.origin_note,
+             ed.edition_count),
         )
         self.conn.commit()
 

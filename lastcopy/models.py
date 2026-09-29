@@ -55,6 +55,7 @@ class Edition(BaseModel):
     publisher: str | None = None
     imprint_place: str | None = None
     language: str | None = None
+    edition_count: int | None = None  # OL work edition_count (survey rarity slice, M3.2)
     origin_note: str = ""  # 'csv', 'csv:invalid-isbn->bib-stub', 'bib-mode', ...
 
 
