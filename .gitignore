@@ -6,3 +6,5 @@ lastcopy.db
 lastcopy.sqlite*
 *.log
 .venv/
+.env
+.env.*

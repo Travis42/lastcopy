@@ -255,12 +255,15 @@ class Store:
 
     def cache_put(self, url: str, params: dict | None, status: int, body: str) -> None:
         key = self.cache_key(url, params)
+        stored = dict(params or {})
+        if "key" in stored:  # never persist API keys in the DB (googleapis ?key=)
+            stored["key"] = "<redacted>"
         self.conn.execute(
             """INSERT INTO cache (key, url, params_json, status, body, stored_at)
                VALUES (?,?,?,?,?,?)
                ON CONFLICT(key) DO UPDATE SET status=excluded.status,
                  body=excluded.body, stored_at=excluded.stored_at""",
-            (key, url, json.dumps(params or {}, sort_keys=True), status, body, time.time()),
+            (key, url, json.dumps(stored, sort_keys=True), status, body, time.time()),
         )
         self.conn.commit()
 

@@ -18,11 +18,13 @@ from .isbn import bib_work_key, normalize_isbn
 from .models import Classification, Cls, Edition, HitStatus, SourceName
 from .net import PoliteClient
 from .store import Store
-from .sources import ia, ol, wikidata
+from .sources import gbooks, ia, ol, wikidata
 from .sources.gbooks import KeyRequiredError
 
-KEYLESS_SOURCES = {"ol": ol.check, "ia": ia.check, "wd": wikidata.check}
-STUB_SOURCES = {"gb": "Google Books", "ht": "HathiTrust", "loc": "LoC SRU"}
+SOURCE_CHECKS = {"ol": ol.check, "ia": ia.check, "wd": wikidata.check,
+                 "gb": gbooks.check}
+STUB_SOURCES = {"ht": "HathiTrust", "loc": "LoC SRU"}
+DEFAULT_KEYLESS = "ol,ia,wd"
 
 
 # ---------------------------------------------------------------- ingest
@@ -46,7 +48,7 @@ def cmd_ingest(args) -> int:
                          imprint_place=row.get("place") or row.get("imprint_place"),
                          language=row.get("language"), origin_note="csv")
             n_isbn += 1
-            for src in KEYLESS_SOURCES:
+            for src in DEFAULT_KEYLESS.split(","):
                 store.enqueue(ed.work_key, src)
         elif isbn_raw and not norm and not args.bib_mode:
             n_invalid += 1  # invalid checksum/length -> falls to bib-stub path
@@ -75,26 +77,48 @@ def cmd_ingest(args) -> int:
 async def _enrich(args) -> int:
     store = Store(args.db)
     run_id = store.start_run("enrich")
-    sources = [s.strip() for s in args.source.split(",") if s.strip()]
+
+    # Default source set (SPEC M3.1): ol,ia,wd + gb when a key resolves.
+    if args.source is None:
+        sources = DEFAULT_KEYLESS.split(",")
+        if gbooks.resolve_key():
+            sources.append("gb")
+        else:
+            print("note: gb omitted from default sources (no Google Books key; "
+                  f"set {gbooks.KEY_ENV} or create {gbooks.KEY_FILE})",
+                  file=sys.stderr)
+    else:
+        sources = [s.strip() for s in args.source.split(",") if s.strip()]
+
     for s in sources:
         if s in STUB_SOURCES:
             print(f"error: source '{s}' ({STUB_SOURCES[s]}) requires a key — "
                   "scaffolded only, wiring lands in M3 (SPEC D2)", file=sys.stderr)
             store.close()
             return 2
-        if s not in KEYLESS_SOURCES:
+        if s not in SOURCE_CHECKS:
             print(f"error: unknown source '{s}'", file=sys.stderr)
             store.close()
             return 2
+    # explicit --source gb without a key raises (never silently skips an explicit ask)
+    if "gb" in sources and not gbooks.resolve_key():
+        store.close()
+        raise gbooks.no_key_error()
+
+    # gb rows are enqueued at enrich time (not ingest) so ingest stays key-agnostic
+    if "gb" in sources:
+        for ed in store.all_editions():
+            if ed.isbn13:
+                store.enqueue(ed.work_key, "gb")
 
     client = PoliteClient(store)
     sem = asyncio.Semaphore(args.workers)
     totals: Counter = Counter()
     editions = store.all_editions()
 
-    # OL must run before IA (IA's oclc: fallback reads OL evidence); WD order-free.
-    for src in [s for s in ("ol", "ia", "wd") if s in sources]:
-        check = KEYLESS_SOURCES[src]
+    # OL must run before IA (IA's oclc: fallback reads OL evidence); WD/GB order-free.
+    for src in [s for s in ("ol", "ia", "wd", "gb") if s in sources]:
+        check = SOURCE_CHECKS[src]
         items = store.pending(src)
         if not items:
             continue
@@ -294,7 +318,7 @@ def cmd_survey(args) -> int:
 
     async def _enrich_survey(client, store):
         for src in ("ia", "wd"):
-            check = KEYLESS_SOURCES[src]
+            check = SOURCE_CHECKS[src]
             editions = store.all_editions()
             for row in store.pending(src):
                 ed = next((e for e in editions if e.work_key == row["work_key"]), None)
@@ -345,8 +369,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("enrich", help="check sources for digital surrogates")
     sp.add_argument("--workers", type=int, default=4)
-    sp.add_argument("--source", default="ol,ia,wd",
-                    help="comma list: ol,ia,wd (keyless M1); gb,ht need keys (M3)")
+    sp.add_argument("--source", default=None,
+                    help="comma list: ol,ia,wd,gb (gb needs a Google Books key; "
+                         "default = ol,ia,wd + gb when a key resolves); ht,loc are M3+ stubs")
     sp.set_defaults(fn=cmd_enrich)
 
     sp = sub.add_parser("classify", help="apply the classification matrix")

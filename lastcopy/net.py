@@ -11,6 +11,7 @@ Every real network request goes through PoliteClient.get() which:
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 from dataclasses import dataclass
 
@@ -18,6 +19,15 @@ import httpx
 
 from . import JITTER_MAX, MIN_INTERVAL_PER_HOST, USER_AGENT
 from .store import Store, host_of
+
+
+def force_ipv4_from_env() -> bool:
+    """LASTCOPY_FORCE_IPV4=1 -> bind local_address=0.0.0.0 (IPv4 egress only).
+
+    Needed when an API key is IP-restricted to the host's IPv4 address but the
+    host egresses IPv6 by default (e.g. the M3.1 Google Books key). Off by default.
+    """
+    return os.environ.get("LASTCOPY_FORCE_IPV4", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -37,12 +47,20 @@ class PoliteClient:
         jitter_max: float = JITTER_MAX,
         sleep_fn=asyncio.sleep,
         rng: random.Random | None = None,
+        force_ipv4: bool | None = None,
     ):
         self.store = store
         self.min_interval = min_interval
         self.jitter_max = jitter_max
         self.sleep = sleep_fn
         self.rng = rng or random.Random()
+        if force_ipv4 is None:
+            force_ipv4 = force_ipv4_from_env()
+        self.force_ipv4 = force_ipv4
+        # httpx 0.28: local_address lives on the transport, not the client.
+        # With an injected transport (tests) IPv4 forcing is a no-op.
+        if transport is None and force_ipv4:
+            transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
         self.client = httpx.AsyncClient(
             transport=transport,
             headers={"User-Agent": USER_AGENT},
