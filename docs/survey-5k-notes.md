@@ -26,3 +26,12 @@
 - era:pre-1927 cell is thin (n=25) — random draw of ISBN-keyed works under-samples
   the pre-ISBN era by construction; the bib-stub lane (D1) exists for exactly that gap.
 - edition_count from Open Library is a work-level rarity proxy, not a holdings count.
+
+## Reviewer correction (2026-09-29 17:50)
+The M3.3 spec's `origin_note` diagnosis was wrong: the reviewer's empty-query came
+from JOINing `classification` — survey mode classifies in memory and writes the
+rows CSV without persisting to the classification table (0 rows; by design, the
+CSV is the artifact). OpenCode nonetheless found and fixed a real latent bug:
+`upsert_edition` clobbered non-empty `origin_note` on provenance-less re-upsert.
+M3.3 verified: 101/101 tests, dry-count {'gb': 3137}, 429-cache eviction required
+(cached error bodies would otherwise replay forever). Backfill armed for 2026-09-30 09:30.
