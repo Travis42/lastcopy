@@ -141,6 +141,48 @@ tests/
   not from the build agent. (Owner/name: `lastcopy` under Theory's account, unless
   overridden.)
 
+## M3.1 — Google Books wiring (key delivered 2026-09-29, Theory)
+
+**Key handling (hard rules):** key lives in env `LASTCOPY_GBOOKS_KEY` or file
+`~/.config/lastcopy/gbooks.key` (chmod 600, already in place on apprentice).
+NEVER hardcode it; never commit it; a test must scan all tracked files for the
+`AIza` key prefix and fail if found. Add `.env` to .gitignore.
+
+**sources/gbooks.py:** query `googleapis.com/books/v1/volumes?q=isbn:{isbn13}&key=…`
+through PoliteClient (host `googleapis.com`, same 1 rps + jitter politeness).
+Map `accessInfo.viewability`: `FULL_PAGES` → surrogate access `public` (GREEN
+evidence); `PARTIAL`/`SAMPLE` → `partial`; `NO_PAGES`/absent → no surrogate.
+Record source-side title/author/year in evidence (see sample-verification below).
+403 (IP restriction) / 429 (quota) / empty → status `unavailable`, classification
+stays UNKNOWN per matrix. Multi-item responses: first item decides viewability,
+all identifiers recorded.
+
+**cli enrich:** `--source` accepts `gb`; default source set = `ol,ia,wd` + `gb`
+when a key resolves (env or file), without `gb` otherwise (single stderr notice,
+not an error).
+
+**Sample-data verification pass (bug found 2026-09-29):** samples/lots.csv was
+agent-authored from memory and contains at least one mislabel — `9780140283334`
+is *Lord of the Flies* (GB: 1999 Penguin), not *The Brothers Karamazov* as our
+label claimed. During M3.1: cross-check every ISBN row of samples/lots.csv
+against OL + GB titles; fix mislabels; replace the Karamazov slot with a real
+in-copyright Karamazov edition (e.g. 9780374528379 Pevear/Volokhonsky) so the
+sample still exercises a modern in-copyright RED-UNVERIFIED case; document the
+relabeling in docs/RUN-M1.md (the prior "RED: Karamazov" line was really LotF).
+Longer-term note (v2 fodder, do not build now): per-source title disagreement is
+itself a signal — log it when seen.
+
+**Tests:** recorded fixtures via `curl -4` (IPv4 is allowlisted; IPv6 restriction
+fix pending on Theory's side) — strip the key param from fixture URLs before
+saving; viewability-mapping matrix tests; no-key behavior (`--source gb` without
+key raises KeyRequiredError; default set silently omits gb); key-leak scan test;
+unavailable-normalization test (403/429 bodies).
+
+**Acceptance:** pytest green incl. new tests; live `--source gb` enrich against
+samples/lots.csv executed with `curl -4`-style IPv4 forcing or after the IPv6
+allowlist entry lands (defer that one live check if needed — say so in the report);
+report shows GB evidence rows; README updated.
+
 ## M1 acceptance criteria
 
 1. `pip install -e .` works; `lastcopy --help` shows ingest/enrich/classify/report.
