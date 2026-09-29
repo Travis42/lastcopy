@@ -183,6 +183,34 @@ samples/lots.csv executed with `curl -4`-style IPv4 forcing or after the IPv6
 allowlist entry lands (defer that one live check if needed — say so in the report);
 report shows GB evidence rows; README updated.
 
+## M3.2 — Survey: rarity slices + gb + citable rows (Theory steer, 2026-09-29)
+
+Steer: the end focus is rare titles, not beloved classics. The survey must measure
+rare-material risk, not just universe prevalence.
+
+1. **draw_sample:** fetch `edition_count` and `language` in OL fields; persist on the
+   editions row (new nullable columns `edition_count INTEGER`, `language TEXT` —
+   migrate with a pragma column-check + ALTER TABLE, safe on existing DBs).
+2. **CLI:** `lastcopy survey --sample N --from Y1 --to Y2 [--source ia,gb] [--filter F]
+   [--rows out.csv] [--md out.md]`. Survey default sources = `ia,gb` (wd optional:
+   ~3× wall cost for marginal signal on this stat — registry mode keeps wd).
+   `--filter F` appends to the OL query (e.g. `language:por` → Azores/PT follow-up
+   survey without code changes).
+3. **Slices in summarize + render, per-cell Wilson 95%:** edition_count buckets
+   1 / 2–3 / ≥4; language `eng` vs non-eng; era pre-1927 / 1927–1969 / 1970+;
+   plus the `all` headline. Cells with n<30 get a `thin-sample` flag in output.
+   **Decided vs unknown:** rows classifying UNKNOWN (source down) are reported
+   separately; headline pct is over decided rows only, with n stated.
+4. **`--rows` CSV (the citable dataset, CC0 per NOTICE):** work_key, isbn13, title,
+   author, year, edition_count, language, sources_checked, surrogate providers+access,
+   class, rule.
+5. **Tests:** draw fixture with new fields incl. missing edition_count/language;
+   slice bucket boundaries (1 vs 2 vs 4; era edges 1926/1927/1969/1970); unknown
+   split; rows-CSV golden; thin-cell flag. Mock transport throughout.
+6. **Acceptance:** pytest green; one live verification run (`--sample 30 --from 1890
+   --to 1999 --rows /tmp/…`) documented in the report. The 5k production run is
+   launched by Apprentice after review — not from the build.
+
 ## M1 acceptance criteria
 
 1. `pip install -e .` works; `lastcopy --help` shows ingest/enrich/classify/report.
