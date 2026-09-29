@@ -1,5 +1,5 @@
 isbn,title,author,year,publisher
-9780486417783,Aesop's Fables,Aesop,1998,Dover Publications
+9780486417783,The Call of the Wild,Jack London,2001,Dover Publications
 9780486282114,Frankenstein,Mary Shelley,1992,Dover Publications
 9780140328721,Fantastic Mr Fox,Roald Dahl,1996,Puffin
 9780060935467,To Kill a Mockingbird,Harper Lee,1988,Warner Books
@@ -9,16 +9,17 @@ isbn,title,author,year,publisher
 9780316769488,The Catcher in the Rye,J. D. Salinger,2001,Little Brown
 9780143039433,The Grapes of Wrath,John Steinbeck,2006,Penguin Classics
 9780451526342,Animal Farm,George Orwell,1996,Signet Classics
-9780140283334,The Brothers Karamazov,Fyodor Dostoyevsky,2003,Penguin Classics
+9780374528379,The Brothers Karamazov,Fyodor Dostoyevsky,2007,Farrar Straus and Giroux
+9780140283334,Lord of the Flies,William Golding,1999,Penguin
 9780141439518,Pride and Prejudice,Jane Austen,2002,Penguin Classics
 9780141439761,Alice's Adventures in Wonderland,Lewis Carroll,2003,Penguin Classics
-9781853260001,Heart of Darkness,Joseph Conrad,1995,Wordsworth Editions
+9781853260001,Pride and Prejudice,Jane Austen,1992,Wordsworth Editions
 9780486280615,Adventures of Huckleberry Finn,Mark Twain,1994,Dover Publications
 9780553213119,Moby-Dick,Herman Melville,1981,Bantam Classics
-9780553212419,The Scarlet Letter,Nathaniel Hawthorne,1981,Bantam Classics
-9780140283372,,,
-9780142437230,,,
-9780140186390,,,
+9780553212419,The Adventures of Sherlock Holmes,Arthur Conan Doyle,1986,Bantam Classics
+9780140283372,Women in Love,D. H. Lawrence,2000,Penguin Classics
+9780142437230,Don Quixote,Miguel de Cervantes,2003,Penguin Classics
+9780140186390,East of Eden,John Steinbeck,1992,Penguin Classics
 ,As Ilhas Desconhecidas,Raul Brandão,1926,Livraria Aillaud
 ,Os Lusíadas,Luís de Camões,1572,António Gonçalves
 ,Cartas Açóricas ,Vitorino Nemésio,1944,
