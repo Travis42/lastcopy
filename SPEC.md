@@ -211,6 +211,21 @@ rare-material risk, not just universe prevalence.
    --to 1999 --rows /tmp/…`) documented in the report. The 5k production run is
    launched by Apprentice after review — not from the build.
 
+## M3.3 — Backfill: retry-unavailable + origin_note fix (Apprentice, 2026-09-29)
+
+The 5k survey hit GB's free daily quota (1,000/day) ~5 min into the GB pass
+(1,015 ok / 3,137 unavailable → 2,348 UNKNOWN rows). Quota resets ~08:00 local daily.
+
+1. **`lastcopy enrich --retry-unavailable`:** re-enqueue every source_hits row with
+   status=unavailable (cache/politeness rules unchanged). Idempotent; safe to run any
+   time. After backfill, `classify` + `report`/`--rows` regenerate normally.
+2. **Bug: survey editions' `origin_note` not persisted** — reviewer query
+   `SELECT count(*) … WHERE origin_note='survey'` returns 0 on the survey DB though
+   draw_sample sets it. Find the upsert gap, fix, add regression test.
+3. **Acceptance:** pytest green; manual verify on /tmp/lc-survey5k.db that
+   `--retry-unavailable` re-enqueues exactly the 3,137 gb rows (dry-count print, no
+   execution — the live backfill is run by Apprentice after the quota window resets).
+
 ## M1 acceptance criteria
 
 1. `pip install -e .` works; `lastcopy --help` shows ingest/enrich/classify/report.
