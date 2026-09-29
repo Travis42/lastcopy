@@ -117,8 +117,10 @@ class Store:
              ON CONFLICT(work_key) DO UPDATE SET
                   isbn13=excluded.isbn13, isbn10=excluded.isbn10, title=excluded.title,
                   author=excluded.author, year=excluded.year, publisher=excluded.publisher,
-                  imprint_place=excluded.imprint_place, language=excluded.language,
-                  origin_note=excluded.origin_note, edition_count=excluded.edition_count""",
+                   imprint_place=excluded.imprint_place, language=excluded.language,
+                   origin_note=CASE WHEN COALESCE(excluded.origin_note, '') = ''
+                     THEN editions.origin_note ELSE excluded.origin_note END,
+                   edition_count=excluded.edition_count""",
             (ed.work_key, ed.isbn13, ed.isbn10, ed.title, ed.author, ed.year,
              ed.publisher, ed.imprint_place, ed.language, ed.origin_note,
              ed.edition_count),
@@ -158,6 +160,54 @@ class Store:
             (status, error, time.time(), work_key, source),
         )
         self.conn.commit()
+
+    # -- backfill (SPEC M3.3) --------------------------------------------------
+    # Cache-eviction URL hints: error bodies (429/quota, 403, transport 0) are
+    # cached with the 30d TTL like any other response, so a retry that left them
+    # in place would replay the cached failure and never reach the network.
+    RETRY_CACHE_URL_HINTS = {
+        "ol": "openlibrary.org",
+        "ia": "archive.org",
+        "wd": "wikidata",
+        "gb": "googleapis.com/books/v1/volumes",
+    }
+
+    def drop_cached_responses(self, work_key: str, source: str) -> int:
+        """Evict cached request bodies belonging to one (work_key, source) pair."""
+        hint = self.RETRY_CACHE_URL_HINTS.get(source)
+        if not hint:
+            return 0
+        cur = self.conn.execute(
+            "DELETE FROM cache WHERE url LIKE ? AND params_json LIKE ?",
+            (f"%{hint}%", f"%{work_key}%"),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def retry_unavailable(self, drop_cache: bool = True) -> list[tuple[str, str]]:
+        """Re-enqueue every source_hits row with status=unavailable (SPEC M3.3).
+
+        Unconditionally resets the queue row to 'pending' (the normal enqueue
+        keeps done rows done); cached responses for the retried pairs are
+        evicted so the re-check actually hits the source again. Idempotent:
+        running it twice re-enqueues the same set, never duplicates.
+        """
+        rows = self.conn.execute(
+            "SELECT work_key, source FROM source_hits WHERE status='unavailable'"
+        ).fetchall()
+        pairs = [(r["work_key"], r["source"]) for r in rows]
+        for wk, src in pairs:
+            self.conn.execute(
+                """INSERT INTO queue (work_key, source, status, attempts, updated_at)
+                   VALUES (?,?, 'pending', 0, ?)
+                   ON CONFLICT(work_key, source) DO UPDATE SET
+                     status='pending', updated_at=excluded.updated_at""",
+                (wk, src, time.time()),
+            )
+            if drop_cache:
+                self.drop_cached_responses(wk, src)
+        self.conn.commit()
+        return pairs
 
     # -- source hits / surrogates / rarity / classification -------------------
     def save_hit(self, hit: SourceHit) -> None:

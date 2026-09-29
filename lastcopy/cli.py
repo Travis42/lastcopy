@@ -78,6 +78,14 @@ async def _enrich(args) -> int:
     store = Store(args.db)
     run_id = store.start_run("enrich")
 
+    # Backfill (SPEC M3.3): re-enqueue unavailable rows before the normal pass.
+    if getattr(args, "retry_unavailable", False):
+        pairs = store.retry_unavailable()
+        by_src: Counter = Counter(src for _, src in pairs)
+        print(f"retry-unavailable: re-enqueued {len(pairs)} source_hits row(s) "
+              + ", ".join(f"{s}={n}" for s, n in sorted(by_src.items()))
+              + " (cached error responses evicted; queue resumable)")
+
     # Default source set (SPEC M3.1): ol,ia,wd + gb when a key resolves.
     if args.source is None:
         sources = DEFAULT_KEYLESS.split(",")
@@ -405,6 +413,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--source", default=None,
                     help="comma list: ol,ia,wd,gb (gb needs a Google Books key; "
                          "default = ol,ia,wd + gb when a key resolves); ht,loc are M3+ stubs")
+    sp.add_argument("--retry-unavailable", action="store_true",
+                    help="re-enqueue every source_hits row with status=unavailable "
+                         "before enriching (SPEC M3.3 backfill; idempotent)")
     sp.set_defaults(fn=cmd_enrich)
 
     sp = sub.add_parser("classify", help="apply the classification matrix")
