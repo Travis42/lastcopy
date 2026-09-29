@@ -226,6 +226,45 @@ The 5k survey hit GB's free daily quota (1,000/day) ~5 min into the GB pass
    `--retry-unavailable` re-enqueues exactly the 3,137 gb rows (dry-count print, no
    execution — the live backfill is run by Apprentice after the quota window resets).
 
+## M4 — THE LIST: offline candidate generator (Theory greenlight 2026-09-29)
+
+**Goal shift (Theory):** find rare books that could go extinct — enumeration, not
+sampling. The live pipeline (M1–M3) stays as the tactical triage tool; M4 builds the
+strategic artifact: the ranked candidate list of likely last copies, derived offline
+from Open Library's monthly CC0 dumps with ZERO live API calls.
+
+**Architecture gate:** gzip-streaming JSON ETL · ~30M records · RAM-bounded ≤1.5G
+(host: 3G total) · CPU-only, streaming, no GPU · storage on the HC volume via the
+project's `data/` symlink. Disk budget: works 2.9G + authors 0.5G stored + reduced
+SQLite ≤4G; the 9.2G editions dump is NEVER stored — streamed `curl | gunzip | parse`
+(failure mid-stream = restart stream from zero; acceptable, documented).
+
+1. **`lastcopy ingest-works --data-dir data/`** — parse stored works dump →
+   `works_ref(work_key PK, edition_count INT, author_keys TEXT)` (batched SQLite
+   counting, NOT a RAM dict); authors dump → `authors_ref(author_key, name)`.
+2. **`lastcopy ingest-editions [--stream-url U | --file F]`** — stream the editions
+   dump; keep only ISBN-keyed records; extract isbn_13/isbn_10, languages, lenient
+   publish_year parse, publishers, `ia` items (IA-scan flag), oclc_numbers, work keys,
+   title → `editions_ref` reduced table. Progress log every 1M records.
+3. **`lastcopy gen-candidates [--max-editions 1] [--lang X] [--from-year --to-year]`**
+   — join editions_ref × works_ref where IA-flag empty AND edition_count ≤ max;
+   deterministic extinction-prior score (edition_count weight, non-eng boost, age
+   boost pre-1970/pre-1927) → `candidates` table.
+4. **`lastcopy export-list --top N --csv F [--md F]`** — THE LIST (CC0): isbn13,
+   title, author (via works→authors join), year, language, edition_count, score,
+   rationale. Output feeds the existing registry `ingest --csv` for verification
+   waves unchanged.
+5. **Tests:** gzipped fixture mini-dumps in the real OL dump format — editions incl.
+   no-ia, multi-ISBN, isbn10-only, missing publish_date, unicode; works 1-vs-5 editions;
+   authors join; counting correctness; bounded-memory assertion on a 50k-record
+   fixture (fail if peak RSS > budget); scoring determinism; golden e2e list.
+6. **Acceptance:** pytest green; documented golden run on a 10k-record fixture;
+   the REAL run (stream 9.2G + joins + export top 10k) is launched by Apprentice
+   after downloads — not from the build.
+
+**Non-goals v1:** publisher-rarity heuristics; pre-ISBN fuzzy works (bib-stub lane
+unchanged); OCLC cross-ref; auto-verification waves of the whole list.
+
 ## M1 acceptance criteria
 
 1. `pip install -e .` works; `lastcopy --help` shows ingest/enrich/classify/report.

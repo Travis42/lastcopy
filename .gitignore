@@ -8,3 +8,4 @@ lastcopy.sqlite*
 .venv/
 .env
 .env.*
+data
