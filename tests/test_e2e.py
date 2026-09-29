@@ -20,19 +20,46 @@ LOT_CSV = f"""isbn,title,author,year,publisher
 """
 
 
-def test_key_required_stubs_raise_clear_errors():
+def test_key_required_stubs_raise_clear_errors(tmp_path, monkeypatch):
     import asyncio
+    from lastcopy.models import Edition
+    from lastcopy.net import PoliteClient
     from lastcopy.sources.gbooks import KeyRequiredError, check as gb_check
     from lastcopy.sources import hathi
-    with pytest.raises(KeyRequiredError, match="M3"):
-        asyncio.run(gb_check())
+    from lastcopy.store import Store
+    monkeypatch.setattr("lastcopy.sources.gbooks.resolve_key", lambda: None)
+    store = Store(tmp_path / "k.db")
+    client = PoliteClient(store)
+    with pytest.raises(KeyRequiredError, match="key"):
+        asyncio.run(gb_check(Edition(work_key="x", isbn13="9780140328721"),
+                             client, store))
     with pytest.raises(KeyRequiredError, match="M3"):
         asyncio.run(hathi.check())
+    store.close()
 
 
-def test_cli_enrich_rejects_gated_source(capsys):
-    assert cli.main(["enrich", "--source", "gb"]) == 2
+def test_cli_explicit_gb_without_key_raises(monkeypatch):
+    monkeypatch.setattr("lastcopy.sources.gbooks.resolve_key", lambda: None)
+    with pytest.raises(Exception, match="key"):
+        cli.main(["enrich", "--source", "gb"])
+
+
+def test_cli_gated_stub_source_still_rejected(capsys):
+    assert cli.main(["enrich", "--source", "ht"]) == 2
     assert "requires a key" in capsys.readouterr().err
+
+
+def test_cli_default_omits_gb_without_key(tmp_path, monkeypatch, capsys):
+    # default source set silently (one stderr notice) omits gb when no key resolves
+    monkeypatch.setattr("lastcopy.sources.gbooks.resolve_key", lambda: None)
+    lot = tmp_path / "empty.csv"
+    lot.write_text("isbn,title,author,year\n", encoding="utf-8")
+    assert cli.main(["--db", str(tmp_path / "d.db"), "ingest", "--csv", str(lot)]) == 0
+    capsys.readouterr()
+    assert cli.main(["--db", str(tmp_path / "d.db"), "enrich"]) == 0
+    err = capsys.readouterr().err
+    assert "gb omitted" in err
+    assert err.count("gb omitted") == 1  # single notice, not an error
 
 
 def run_cli(*argv) -> str:
@@ -78,6 +105,8 @@ def test_e2e_golden_report(tmp_path, monkeypatch):
                              min_interval=0.0, jitter_max=0.0)
 
     monkeypatch.setattr(cli_mod, "PoliteClient", FixtureClient)
+    # deterministic default source set regardless of a real key present on the host
+    monkeypatch.setattr("lastcopy.sources.gbooks.resolve_key", lambda: None)
     run_cli("--db", str(db), "enrich")
 
     # --- classify

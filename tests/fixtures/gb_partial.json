@@ -1,0 +1,80 @@
+{
+  "kind": "books#volumes",
+  "totalItems": 1,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "mWHcDAAAQBAJ",
+      "etag": "Yz/Y4Ix0DPE",
+      "selfLink": "https://www.googleapis.com/books/v1/volumes/mWHcDAAAQBAJ",
+      "volumeInfo": {
+        "title": "Adventures of Huckleberry Finn",
+        "authors": [
+          "Mark Twain"
+        ],
+        "publisher": "Courier Corporation",
+        "publishedDate": "1994",
+        "description": "Referring to \"Adventures of Huckleberry Finn, \" H. L. Mencken noted that his discovery of this classic American novel was \"the most stupendous event of my whole life\"; Ernest Hemingway declared that \"all modern American literature stems from this one book,\" while T. S. Eliot called Huck \"one of the permanent symbolic figures of fiction, not unworthy to take a place with Ulysses, Faust, Don Quixote, Don Juan, Hamlet.\" The novel's preeminence derives from its wonderfully imaginative re-creation of boyhood adventures along the mighty Mississippi River, its inspired characterization, the author's remarkable ear for dialogue, and the book's understated development of serious underlying themes: \"natural\" man versus \"civilized\" society, the evils of slavery, the innate value and dignity of human beings, the stultifying effects of convention, and other topics. But most of all, \"Adventures of Huckleberry Finn\" is a wonderful story filled with high adventure and unforgettable characters (including the great river itself) that no one who has read it will ever forget. Unabridged Dover (1994) republication of the text of the first American edition, published by Charles L. Webster and Company, New York, 1885. New introductory Note.\"",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9780486280615"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "0486280616"
+          }
+        ],
+        "readingModes": {
+          "text": false,
+          "image": true
+        },
+        "pageCount": 227,
+        "printType": "BOOK",
+        "categories": [
+          "Fiction"
+        ],
+        "maturityRating": "NOT_MATURE",
+        "allowAnonLogging": true,
+        "contentVersion": "1.6.0.0.preview.1",
+        "panelizationSummary": {
+          "containsEpubBubbles": false,
+          "containsImageBubbles": false
+        },
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=mWHcDAAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=mWHcDAAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en",
+        "previewLink": "http://books.google.de/books?id=mWHcDAAAQBAJ&printsec=frontcover&dq=isbn:9780486280615&hl=&cd=1&source=gbs_api",
+        "infoLink": "http://books.google.de/books?id=mWHcDAAAQBAJ&dq=isbn:9780486280615&hl=&source=gbs_api",
+        "canonicalVolumeLink": "https://books.google.com/books/about/Adventures_of_Huckleberry_Finn.html?hl=&id=mWHcDAAAQBAJ"
+      },
+      "saleInfo": {
+        "country": "DE",
+        "saleability": "NOT_FOR_SALE",
+        "isEbook": false
+      },
+      "accessInfo": {
+        "country": "DE",
+        "viewability": "PARTIAL",
+        "embeddable": true,
+        "publicDomain": false,
+        "textToSpeechPermission": "ALLOWED",
+        "epub": {
+          "isAvailable": false
+        },
+        "pdf": {
+          "isAvailable": true,
+          "acsTokenLink": "http://books.google.de/books/download/Adventures_of_Huckleberry_Finn-sample-pdf.acsm?id=mWHcDAAAQBAJ&format=pdf&output=acs4_fulfillment_token&dl_type=sample&source=gbs_api"
+        },
+        "webReaderLink": "http://play.google.com/books/reader?id=mWHcDAAAQBAJ&hl=&source=gbs_api",
+        "accessViewStatus": "SAMPLE",
+        "quoteSharingAllowed": false
+      },
+      "searchInfo": {
+        "textSnippet": "Referring to &quot;Adventures of Huckleberry Finn, &quot; H. L. Mencken noted that his discovery of this classic American novel was &quot;the most stupendous event of my whole life&quot;; Ernest Hemingway declared that &quot;all modern American literature stems ..."
+      }
+    }
+  ]
+}

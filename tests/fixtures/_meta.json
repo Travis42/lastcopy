@@ -41,5 +41,35 @@
   "wd_error": {
     "url": "https://query.wikidata.org/sparql?format=json&query=SELECT+WHERE+%7B+%3F%3F%3F+%7D",
     "status": 400
+  },
+  "gb_full": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780553213119",
+    "status": 200,
+    "note": "real Google-scan item XV8XAAAAYAAJ (ALL_PAGES) from a filter=free-ebooks response; scanned public-domain volumes carry no ISBN, so the volumes envelope + ISBN_13 identifier are shape-faithful adaptations. Key stripped from URL."
+  },
+  "gb_partial": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780486280615",
+    "status": 200,
+    "note": "real response (Huck Finn, Dover, PARTIAL), recorded 2026-09-29 over IPv4 with the M3.1 key; key stripped from URL."
+  },
+  "gb_no_pages": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140283334",
+    "status": 200,
+    "note": "real response (Lord of the Flies, Penguin 1999, NO_PAGES), recorded 2026-09-29 over IPv4; key stripped from URL."
+  },
+  "gb_miss": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780060935467",
+    "status": 200,
+    "note": "real response, totalItems=0 (valid ISBN, no GB match), recorded 2026-09-29 over IPv4; key stripped from URL."
+  },
+  "gb_403": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140283334",
+    "status": 403,
+    "note": "real body: key IP-restriction refusal observed when egressing IPv6 (the M3.1 key is IPv4-allowlisted). No key material in body."
+  },
+  "gb_429": {
+    "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140328721",
+    "status": 429,
+    "note": "synthetic shape-faithful quota-exhaustion body (a real 429 cannot be triggered politely on demand)."
   }
 }

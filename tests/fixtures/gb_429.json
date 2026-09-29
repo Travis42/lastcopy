@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": 429,
+    "message": "Quota exceeded for quota group 'default'",
+    "errors": [
+      {
+        "message": "Quota exceeded",
+        "domain": "global.googleapis.com",
+        "reason": "rateLimitExceeded"
+      }
+    ],
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "error": {
+    "code": 403,
+    "message": "The provided API key has an IP address restriction. The originating IP address of the call (2a01:4f8:1c19:a302::1) violates this restriction.",
+    "errors": [
+      {
+        "message": "The provided API key has an IP address restriction. The originating IP address of the call (2a01:4f8:1c19:a302::1) violates this restriction.",
+        "domain": "global",
+        "reason": "forbidden"
+      }
+    ],
+    "status": "PERMISSION_DENIED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "API_KEY_IP_ADDRESS_BLOCKED",
+        "domain": "googleapis.com",
+        "metadata": {
+          "service": "books.googleapis.com",
+          "callerIp": "2a01:4f8:1c19:a302::1",
+          "consumer": "projects/187777003245"
+        }
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.LocalizedMessage",
+        "locale": "en-US",
+        "message": "The provided API key has an IP address restriction. The originating IP address of the call (2a01:4f8:1c19:a302::1) violates this restriction."
+      }
+    ]
+  }
+}

@@ -59,7 +59,7 @@ def test_survey_pipeline_all_no_surrogate(tmp_path):
     editions = asyncio.run(survey.draw_sample(client, store, 8, 1900, 1930))
     assert len(editions) == 8 and all(e.work_key.startswith("978") for e in editions)
     for src in ("ia", "wd"):
-        check = cli_mod.KEYLESS_SOURCES[src]
+        check = cli_mod.SOURCE_CHECKS[src]
         for row in store.pending(src):
             ed = next(e for e in editions if e.work_key == row["work_key"])
             out = asyncio.run(check(ed, client, store))
@@ -97,7 +97,7 @@ def test_survey_split_pre_post_1927(tmp_path):
 
     editions = asyncio.run(survey.draw_sample(client, store, 8, 1900, 1960))
     for src in ("ia", "wd"):
-        check = cli_mod.KEYLESS_SOURCES[src]
+        check = cli_mod.SOURCE_CHECKS[src]
         for row in store.pending(src):
             ed = next(e for e in editions if e.work_key == row["work_key"])
             out = asyncio.run(check(ed, client, store))

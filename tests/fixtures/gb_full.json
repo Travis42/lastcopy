@@ -1,0 +1,79 @@
+{
+  "kind": "books#volumes",
+  "totalItems": 1,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "XV8XAAAAYAAJ",
+      "etag": "oywBl3zKips",
+      "selfLink": "https://www.googleapis.com/books/v1/volumes/XV8XAAAAYAAJ",
+      "volumeInfo": {
+        "title": "Moby Dick",
+        "authors": [
+          "Herman Melville"
+        ],
+        "publishedDate": "1892",
+        "description": "A literary classic that wasn't recognized for its merits until decades after its publication, Herman Melville's Moby-Dick tells the tale of a whaling ship and its crew, who are carried progressively further out to sea by the fiery Captain Ahab. Obsessed with killing the massive whale, which had previously bitten off Ahab's leg, the seasoned seafarer steers his ship to confront the creature, while the rest of the shipmates, including the young narrator, Ishmael, and the harpoon expert, Queequeg, must contend with their increasingly dire journey. The book invariably lands on any short list of the greatest American novels.",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9780553213119"
+          }
+        ],
+        "readingModes": {
+          "text": true,
+          "image": true
+        },
+        "pageCount": 576,
+        "printType": "BOOK",
+        "categories": [
+          "Adventure stories"
+        ],
+        "averageRating": 4,
+        "ratingsCount": 274,
+        "maturityRating": "NOT_MATURE",
+        "allowAnonLogging": false,
+        "contentVersion": "1.6.15.0.full.3",
+        "panelizationSummary": {
+          "containsEpubBubbles": false,
+          "containsImageBubbles": false
+        },
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=XV8XAAAAYAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=XV8XAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en",
+        "previewLink": "http://books.google.de/books?id=XV8XAAAAYAAJ&pg=PA156&dq=%22moby+dick%22&hl=&as_brr=7&cd=1&source=gbs_api",
+        "infoLink": "https://play.google.com/store/books/details?id=XV8XAAAAYAAJ&source=gbs_api",
+        "canonicalVolumeLink": "https://play.google.com/store/books/details?id=XV8XAAAAYAAJ"
+      },
+      "saleInfo": {
+        "country": "DE",
+        "saleability": "FREE",
+        "isEbook": true,
+        "buyLink": "https://play.google.com/store/books/details?id=XV8XAAAAYAAJ&rdid=book-XV8XAAAAYAAJ&rdot=1&source=gbs_api"
+      },
+      "accessInfo": {
+        "country": "DE",
+        "viewability": "ALL_PAGES",
+        "embeddable": true,
+        "publicDomain": true,
+        "textToSpeechPermission": "ALLOWED",
+        "epub": {
+          "isAvailable": true,
+          "downloadLink": "http://books.google.de/books/download/Moby_Dick.epub?id=XV8XAAAAYAAJ&hl=&output=epub&source=gbs_api"
+        },
+        "pdf": {
+          "isAvailable": true,
+          "downloadLink": "http://books.google.de/books/download/Moby_Dick.pdf?id=XV8XAAAAYAAJ&hl=&output=pdf&sig=ACfU3U2j7tKT8bbSwXHCttT_eX6HUg70aA&source=gbs_api"
+        },
+        "webReaderLink": "http://play.google.com/books/reader?id=XV8XAAAAYAAJ&hl=&as_brr=7&source=gbs_api",
+        "accessViewStatus": "FULL_PUBLIC_DOMAIN",
+        "quoteSharingAllowed": false
+      },
+      "searchInfo": {
+        "textSnippet": "... <b>Moby Dick</b> \u2014 <b>Moby Dick</b> ! &quot; &quot; Captain Ahab , &quot; said Starbuck , who with Stubb and Flask , had thus far been eyeing his superior with increasing surprise , but at last seemed struck with a thought which somewhat explained all the wonder&nbsp;..."
+      }
+    }
+  ]
+}
