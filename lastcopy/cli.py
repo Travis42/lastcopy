@@ -385,6 +385,80 @@ def cmd_confirm(args) -> int:
     return 2
 
 
+# ---------------------------------------------------------------- M4: THE LIST
+def cmd_ingest_works(args) -> int:
+    from . import m4
+
+    if args.works or args.authors:
+        works, authors = args.works, args.authors
+    else:
+        d = Path(args.data_dir)
+        works = sorted(d.glob("ol_dump_works_*.txt.gz"))
+        authors = sorted(d.glob("ol_dump_authors_*.txt.gz"))
+        if not works or not authors:
+            print(f"error: no ol_dump_works_*.txt.gz / ol_dump_authors_*.txt.gz "
+                  f"under {d} (or pass --works/--authors explicitly)", file=sys.stderr)
+            return 2
+        works, authors = works[-1], authors[-1]
+    conn = m4.connect(args.db)
+    try:
+        stats = m4.ingest_works(conn, works, authors)
+    finally:
+        conn.close()
+    print(f"ingest-works: {stats['works']:,} works, {stats['authors']:,} authors "
+          f"(from {works}, {authors})")
+    return 0
+
+
+def cmd_ingest_editions(args) -> int:
+    from . import m4
+
+    if bool(args.file) == bool(args.stream_url):
+        print("error: pass exactly one of --file / --stream-url", file=sys.stderr)
+        return 2
+    conn = m4.connect(args.db)
+    try:
+        stats = m4.ingest_editions(conn, file=args.file, url=args.stream_url,
+                                   retries=args.retries)
+    finally:
+        conn.close()
+    print(f"ingest-editions: {stats['isbn_keyed_rows']:,} ISBN-keyed rows kept "
+          f"({stats['restarts']} stream restart(s); dump never written to disk)")
+    return 0
+
+
+def cmd_gen_candidates(args) -> int:
+    from . import m4
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m4.gen_candidates(conn, max_editions=args.max_editions,
+                                  lang=args.lang, from_year=args.from_year,
+                                  to_year=args.to_year)
+    finally:
+        conn.close()
+    print(f"gen-candidates: {stats['candidates']:,} candidate(s) "
+          f"({stats['filters']})")
+    return 0
+
+
+def cmd_export_list(args) -> int:
+    from . import m4
+
+    if not args.csv and not args.md:
+        print("error: pass at least one of --csv / --md", file=sys.stderr)
+        return 2
+    conn = m4.connect(args.db)
+    try:
+        stats = m4.export_list(conn, args.top, args.csv or
+                               str(Path(args.md).with_suffix(".csv")), args.md)
+    finally:
+        conn.close()
+    print(f"export-list: {stats['exported']:,} row(s) -> {stats['csv']}"
+          + (f", {stats['md']}" if stats["md"] else ""))
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def _to_year(v):
     try:
@@ -440,6 +514,41 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(fn=cmd_survey)
     sp = sub.add_parser("confirm", help="manual OCLC/BookFinder annotations in (M3)")
     sp.set_defaults(fn=cmd_confirm)
+
+    sp = sub.add_parser("ingest-works",
+                        help="stored OL works+authors dumps -> works_ref/authors_ref (M4)")
+    sp.add_argument("--data-dir", default="data",
+                    help="dir holding ol_dump_{works,authors}_*.txt.gz "
+                         "(the data/ symlink to the HC volume)")
+    sp.add_argument("--works", help="explicit works dump path (overrides --data-dir)")
+    sp.add_argument("--authors", help="explicit authors dump path (overrides --data-dir)")
+    sp.set_defaults(fn=cmd_ingest_works)
+
+    sp = sub.add_parser("ingest-editions",
+                        help="stream the editions dump (curl|gunzip|parse) -> editions_ref (M4)")
+    src = sp.add_mutually_exclusive_group(required=True)
+    src.add_argument("--stream-url", default=None,
+                     help="gz dump URL to stream (never written to disk)")
+    src.add_argument("--file", default=None,
+                     help="local gz dump path (fixtures / offline replay)")
+    sp.add_argument("--retries", type=int, default=3,
+                    help="stream restarts from zero on mid-stream failure")
+    sp.set_defaults(fn=cmd_ingest_editions)
+
+    sp = sub.add_parser("gen-candidates",
+                        help="IA-empty x edition_count<=max join + extinction-prior score (M4)")
+    sp.add_argument("--max-editions", type=int, default=1)
+    sp.add_argument("--lang", default=None, help="exact language code filter, e.g. por")
+    sp.add_argument("--from", dest="from_year", type=int, default=None)
+    sp.add_argument("--to", dest="to_year", type=int, default=None)
+    sp.set_defaults(fn=cmd_gen_candidates)
+
+    sp = sub.add_parser("export-list",
+                        help="THE LIST: top-N candidates as CC0 CSV/MD (M4)")
+    sp.add_argument("--top", type=int, default=1000)
+    sp.add_argument("--csv", default=None, help="output CSV (feeds ingest --csv)")
+    sp.add_argument("--md", default=None, help="output Markdown table")
+    sp.set_defaults(fn=cmd_export_list)
     return p
 
 
