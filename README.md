@@ -19,7 +19,7 @@ lose the last accessible copy — before you ship the pallet.
 
 Every classification carries a machine-readable rationale and evidence URLs.
 
-## Quickstart (M1 — keyless: Open Library + Internet Archive + Wikidata)
+## Quickstart (M1 keyless: Open Library + Internet Archive + Wikidata; M3.1: + Google Books)
 
 ```bash
 pip install -e .
@@ -35,8 +35,31 @@ lastcopy report --md out.md --csv out.csv # RED list first + roll-up + counts
 - Pre-ISBN rows are ingested as `bib-stub` work keys (sha1 of normalized
   `title|author|year`) and queued — no fuzzy resolution in v1 (decision D1: keep
   ambiguity visible, never guessed).
-- Google Books / HathiTrust / OCLC land in M3 behind a key-signup checklist; their
-  source modules are scaffolded and raise clear "key required" errors today.
+
+### Google Books (M3.1, optional)
+
+`gb` joins the default source set automatically when a free Google Books API key
+resolves — set env `LASTCOPY_GBOOKS_KEY` or put the key in
+`~/.config/lastcopy/gbooks.key` (chmod 600, **outside** the repo; never commit
+it — a test scans all tracked files for key-shaped material). Without a key, `gb`
+is silently omitted from the default set (one stderr notice); an explicit
+`--source gb` without a key raises `KeyRequiredError`.
+
+- Viewability mapping: `FULL_PAGES`/`ALL_PAGES` → public surrogate (GREEN
+  evidence); `PARTIAL`/`SAMPLE` → partial (not an accessible surrogate);
+  `NO_PAGES`/absent → no surrogate. 403 (key IP restriction) / 429 (quota) /
+  empty → `unavailable`, classification stays UNKNOWN.
+- The API key travels only as a request query param; it is redacted before the
+  response is written to the local cache and never appears in the rate-limit
+  ledger.
+
+**IPv4 note:** if your key is IP-restricted to your host's IPv4 address but the
+host egresses IPv6 by default (Google answers 403 "IP address restriction" over
+IPv6), set `LASTCOPY_FORCE_IPV4=1` — the polite client then binds
+`local_address=0.0.0.0` (IPv4-only egress). Off by default.
+
+- HathiTrust / OCLC land later in M3 behind a key-signup checklist; their source
+  modules are scaffolded and raise clear "key required" errors today.
 
 ## Why this exists
 
@@ -62,8 +85,10 @@ Key reporting:
 - **M2 (done, stretch):** `lastcopy survey --sample N --from Y1 --to Y2` — random OL
   sample → "% no accessible digital surrogate" + Wilson 95% CI, split pre/post 1927
   (see `docs/survey-sample.md` for a live 15-book run).
-- **M3 (later):** Google Books / HathiTrust / OCLC keys wired; confirm workflow;
-  public dashboard.
+- **M3.1 (done):** Google Books wired behind a free API key (viewability matrix,
+  IPv4-forcing knob for IP-restricted keys, key-leak scan test); see
+  `docs/RUN-M1.md` for the sample-data relabeling pass it triggered.
+- **M3 (later):** HathiTrust / OCLC keys wired; confirm workflow; public dashboard.
 
 See `SPEC.md` for the approved contract and `docs/RUN-M1.md` for a documented
 end-to-end run.
