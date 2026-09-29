@@ -88,6 +88,14 @@ Key reporting:
 - **M3.1 (done):** Google Books wired behind a free API key (viewability matrix,
   IPv4-forcing knob for IP-restricted keys, key-leak scan test); see
   `docs/RUN-M1.md` for the sample-data relabeling pass it triggered.
+- **M4 (done):** THE LIST — offline candidate generator from Open Library CC0
+  dumps, zero live API calls: `ingest-works`, `ingest-editions` (streams the
+  9.2G editions dump `curl | gunzip | parse`, never written to disk, restart
+  from zero on mid-stream failure), `gen-candidates` (IA-empty ×
+  edition-count join + deterministic extinction-prior score), `export-list`
+  (CC0 CSV/MD; feeds `ingest --csv` for verification waves). RAM-bounded
+  (~44 MB peak on the 10k golden fixture vs the 1.5G ceiling; see
+  `docs/M4-RUN.md`).
 - **M3 (later):** HathiTrust / OCLC keys wired; confirm workflow; public dashboard.
 
 See `SPEC.md` for the approved contract and `docs/RUN-M1.md` for a documented
