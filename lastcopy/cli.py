@@ -451,7 +451,8 @@ def cmd_export_list(args) -> int:
     conn = m4.connect(args.db)
     try:
         stats = m4.export_list(conn, args.top, args.csv or
-                               str(Path(args.md).with_suffix(".csv")), args.md)
+                               str(Path(args.md).with_suffix(".csv")), args.md,
+                               editions_dump=args.editions_dump)
     finally:
         conn.close()
     print(f"export-list: {stats['exported']:,} row(s) -> {stats['csv']}"
@@ -548,6 +549,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--top", type=int, default=1000)
     sp.add_argument("--csv", default=None, help="output CSV (feeds ingest --csv)")
     sp.add_argument("--md", default=None, help="output Markdown table")
+    sp.add_argument("--editions-dump", default=None,
+                    help="local gz editions dump path; one streaming pass "
+                         "backfills winners' titles (slim editions_ref stores none)")
     sp.set_defaults(fn=cmd_export_list)
     return p
 

@@ -66,3 +66,17 @@ nonzero exit with `StreamFailed`.
 4. `lastcopy --db data/m4.db gen-candidates --max-editions 1`
 5. `lastcopy --db data/m4.db export-list --top 10000 --csv data/list-top10k.csv --md data/list-top10k.md`
 6. Verification waves: `lastcopy --db reg.db ingest --csv data/list-top10k.csv` (unchanged registry path).
+
+## Slim ingest (2026-09-30, Theory-approved)
+
+`editions_ref` now stores only `(isbn13, edition_key, work_key, year,
+language, ia)` — title/isbn10/publishers/oclc are never used downstream and
+dropped from storage (~10x row-size cut over the ~56M ISBN-keyed editions).
+Winners' titles are re-derived at export time: `export-list --editions-dump
+<local gz dump>` streams the dump once and backfills the top-N candidates'
+titles (`title or full_title or subtitle`, first matching record per ISBN)
+via `UPDATE candidates SET title=? WHERE isbn13=?`; without the flag, titles
+export as empty. The verified full editions dump stays archived on lab, so
+any future fat-field need is a re-derivation away — no compat mode exists.
+The slim path reproduces the FAT-path golden list byte-for-byte
+(`tests/test_m4_slim_equivalence.py` vs `docs/m4-list-top50.csv`).

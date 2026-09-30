@@ -49,15 +49,11 @@ CREATE TABLE IF NOT EXISTS authors_ref (
 );
 CREATE TABLE IF NOT EXISTS editions_ref (
   isbn13 TEXT PRIMARY KEY,
-  isbn10 TEXT,
   edition_key TEXT,
   work_key TEXT,
-  title TEXT,
   year INTEGER,
   language TEXT,
-  publishers TEXT,
-  ia TEXT,
-  oclc_numbers TEXT
+  ia TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_editions_ref_work ON editions_ref(work_key);
 CREATE TABLE IF NOT EXISTS candidates (
@@ -197,19 +193,8 @@ def extract_edition(key: str, obj: dict) -> list[dict]:
     langs = [str(l).rsplit("/", 1)[-1] for l in _as_list(obj.get("languages"))]
     works = [w.get("key") for w in obj.get("works") or [] if isinstance(w, dict)]
     ia = ",".join(str(x) for x in _as_list(obj.get("ia")))
-    oclc = ",".join(str(x) for x in _as_list(obj.get("oclc_numbers")))
-    publishers = "; ".join(str(p) for p in _as_list(obj.get("publishers"))[:3])
-    isbn10 = None
-    for raw in _as_list(obj.get("isbn_10")):
-        norm = normalize_isbn(str(raw))
-        if norm:
-            isbn10 = norm[1]
-            break
-    title = obj.get("title") or obj.get("full_title") or obj.get("subtitle")
     base = dict(edition_key=key, work_key=works[0] if works else None,
-                title=title, year=year, language=langs[0] if langs else None,
-                publishers=publishers or None, ia=ia or None, oclc_numbers=oclc or None,
-                isbn10=isbn10)
+                year=year, language=langs[0] if langs else None, ia=ia or None)
     return [dict(base, isbn13=i13) for i13 in ordered]
 
 
@@ -295,25 +280,22 @@ def ingest_editions(conn: sqlite3.Connection, *, file: str | Path | None = None,
                     if not key.startswith("/books/"):
                         continue
                     for row in extract_edition(key, obj):
-                        batch.append((row["isbn13"], row["isbn10"], row["edition_key"],
-                                      row["work_key"], row["title"], row["year"],
-                                      row["language"], row["publishers"], row["ia"],
-                                      row["oclc_numbers"]))
+                        batch.append((row["isbn13"], row["edition_key"],
+                                      row["work_key"], row["year"],
+                                      row["language"], row["ia"]))
                         kept += 1
                     if len(batch) >= BATCH:
                         conn.executemany(
                             """INSERT OR REPLACE INTO editions_ref
-                               (isbn13, isbn10, edition_key, work_key, title, year,
-                                language, publishers, ia, oclc_numbers)
-                               VALUES (?,?,?,?,?,?,?,?,?,?)""", batch)
+                               (isbn13, edition_key, work_key, year, language, ia)
+                               VALUES (?,?,?,?,?,?)""", batch)
                         conn.commit()
                         batch.clear()
                 if batch:
                     conn.executemany(
                         """INSERT OR REPLACE INTO editions_ref
-                           (isbn13, isbn10, edition_key, work_key, title, year,
-                            language, publishers, ia, oclc_numbers)
-                           VALUES (?,?,?,?,?,?,?,?,?,?)""", batch)
+                           (isbn13, edition_key, work_key, year, language, ia)
+                           VALUES (?,?,?,?,?,?)""", batch)
                     conn.commit()
             break
         except (StreamFailed, EOFError, gzip.BadGzipFile, OSError) as exc:
@@ -361,8 +343,7 @@ def gen_candidates(conn: sqlite3.Connection, *, max_editions: int = 1,
                    lang: str | None = None, from_year: int | None = None,
                    to_year: int | None = None) -> dict:
     """editions_ref x works_ref join: IA-flag empty AND edition_count <= max."""
-    sql = """SELECT e.isbn13, e.work_key, e.title, e.year, e.language,
-                    w.edition_count
+    sql = """SELECT e.isbn13, e.work_key, e.year, e.language, w.edition_count
              FROM editions_ref e JOIN works_ref w ON e.work_key = w.work_key
              WHERE (e.ia IS NULL OR e.ia = '') AND w.edition_count <= ?"""
     params: list = [max_editions]
@@ -382,7 +363,7 @@ def gen_candidates(conn: sqlite3.Connection, *, max_editions: int = 1,
     for row in conn.execute(sql, params):
         score, rationale = score_candidate(row["edition_count"], row["language"],
                                            row["year"])
-        batch.append((row["isbn13"], row["work_key"], row["title"], row["year"],
+        batch.append((row["isbn13"], row["work_key"], None, row["year"],
                       row["language"], row["edition_count"], score, rationale))
         n += 1
         if len(batch) >= BATCH:
@@ -422,14 +403,53 @@ LIST_HEADER = ["isbn13", "title", "author", "year", "language",
                "edition_count", "score", "rationale"]
 
 
+def _backfill_titles(conn: sqlite3.Connection, rows, editions_dump) -> int:
+    """Stream the editions dump once; fill winners' titles from record JSON.
+
+    Downstream only the top winners' titles are ever used, so titles are not
+    stored in ``editions_ref`` (slim schema); this single pass re-derives them.
+    For any record whose generated ISBN-13 set intersects the winners' ISBNs,
+    the title precedence is exactly what the fat path stored:
+    ``title or full_title or subtitle``. First matching record wins per ISBN.
+    """
+    winners = {r["isbn13"] for r in rows}
+    titles: dict[str, str] = {}
+    with open_dump(path=editions_dump) as fh:
+        for key, obj in iter_dump_records(fh, 0, "titles"):
+            if key == "_summary" or not key.startswith("/books/"):
+                continue
+            title = obj.get("title") or obj.get("full_title") or obj.get("subtitle")
+            if not title:
+                continue
+            for raw in [*_as_list(obj.get("isbn_13")), *_as_list(obj.get("isbn_10"))]:
+                norm = normalize_isbn(str(raw))
+                if norm and norm[0] in winners and norm[0] not in titles:
+                    titles[norm[0]] = str(title)
+    if titles:
+        conn.executemany("UPDATE candidates SET title=? WHERE isbn13=?",
+                         [(t, i13) for i13, t in titles.items()])
+        conn.commit()
+    return len(titles)
+
+
 def export_list(conn: sqlite3.Connection, top: int, csv_path: str | Path,
-                md_path: str | Path | None = None) -> dict:
-    """THE LIST (CC0): top-N candidates; CSV feeds registry `ingest --csv` unchanged."""
-    rows = conn.execute(
-        """SELECT c.isbn13, c.title, c.year, c.language, c.edition_count,
-                  c.score, c.rationale, w.author_keys
-           FROM candidates c JOIN works_ref w ON c.work_key = w.work_key
-           ORDER BY c.score DESC, c.isbn13 ASC LIMIT ?""", (top,)).fetchall()
+                md_path: str | Path | None = None,
+                editions_dump: str | Path | None = None) -> dict:
+    """THE LIST (CC0): top-N candidates; CSV feeds registry `ingest --csv` unchanged.
+
+    ``editions_dump`` (optional): one streaming pass over the editions dump to
+    backfill winners' titles (slim editions_ref stores no titles). None ->
+    titles stay NULL and CSV/MD emit them empty.
+    """
+    sql = """SELECT c.isbn13, c.title, c.year, c.language, c.edition_count,
+                    c.score, c.rationale, w.author_keys
+             FROM candidates c JOIN works_ref w ON c.work_key = w.work_key
+             ORDER BY c.score DESC, c.isbn13 ASC LIMIT ?"""
+    rows = conn.execute(sql, (top,)).fetchall()
+    filled = 0
+    if editions_dump is not None and rows:
+        filled = _backfill_titles(conn, rows, editions_dump)
+        rows = conn.execute(sql, (top,)).fetchall()
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(LIST_HEADER)
@@ -451,4 +471,5 @@ def export_list(conn: sqlite3.Connection, top: int, csv_path: str | Path,
                          f"| {r['score']} | {r['rationale']} |")
         lines.append("")
         Path(md_path).write_text("\n".join(lines), encoding="utf-8")
-    return {"exported": len(rows), "csv": str(csv_path), "md": str(md_path or "")}
+    return {"exported": len(rows), "csv": str(csv_path), "md": str(md_path or ""),
+            "titles_backfilled": filled}

@@ -150,6 +150,16 @@ def test_ingest_works_authors_join(mini_db):
 
 
 # ------------------------------------------------------------- ingest-editions
+def test_editions_ref_schema_is_slim(mini_db):
+    """Slim storage (Theory 2026-09-30): only the columns downstream uses."""
+    conn, _ = mini_db
+    cols = [r["name"] for r in conn.execute(
+        "PRAGMA table_info(editions_ref)")]
+    assert cols == ["isbn13", "edition_key", "work_key", "year", "language", "ia"]
+    for dropped in ("isbn10", "title", "publishers", "oclc_numbers"):
+        assert dropped not in cols
+
+
 def test_ingest_editions_edges(mini_db):
     conn, tmp_path = mini_db
     stats = m4.ingest_editions(conn, file=tmp_path / "editions.txt.gz",
@@ -159,25 +169,21 @@ def test_ingest_editions_edges(mini_db):
     assert isbn13_checksum_ok(isbn13_for(1))
     r1 = conn.execute("SELECT * FROM editions_ref WHERE isbn13=?", (isbn13_for(1),)
                       ).fetchone()
-    assert r1["title"] == "Poemas Açorianos" and r1["year"] == 1920
-    assert r1["language"] == "por" and r1["ia"] is None
-    assert r1["work_key"] == "/works/OLW1" and r1["oclc_numbers"] == "123"
-    # isbn10-only converted
+    assert r1["year"] == 1920 and r1["language"] == "por" and r1["ia"] is None
+    assert r1["work_key"] == "/works/OLW1" and r1["edition_key"] == "/books/OL1M"
+    # isbn10-only converted to isbn13 (isbn10 itself no longer stored)
     r4 = conn.execute("SELECT * FROM editions_ref WHERE isbn13=?",
                       (isbn10_to_13(isbn10_for(5)),)).fetchone()
-    assert r4["isbn10"] == isbn10_for(5) and r4["year"] == 1962
+    assert r4["year"] == 1962 and r4["isbn13"] == isbn10_to_13(isbn10_for(5))
     # multi-isbn -> both rows share edition data
     for i in (3, 4):
         row = conn.execute("SELECT * FROM editions_ref WHERE isbn13=?",
                            (isbn13_for(i),)).fetchone()
-        assert row["title"] == "Dual ISBN Edition" and row["year"] == 1950
-    # missing publish_date -> NULL year; unicode title intact
+        assert row["work_key"] == "/works/OLW3" and row["year"] == 1950
+    # missing publish_date -> NULL year
     r5 = conn.execute("SELECT year FROM editions_ref WHERE isbn13=?",
                       (isbn13_for(6),)).fetchone()
     assert r5["year"] is None
-    r7 = conn.execute("SELECT title FROM editions_ref WHERE isbn13=?",
-                      (isbn13_for(7),)).fetchone()
-    assert r7["title"] == "Ilhas — Maré de Histórias 📚"
     # broken-checksum ISBN never stored
     assert conn.execute("SELECT COUNT(*) c FROM editions_ref WHERE isbn13=?",
                         (BAD_ISBN13,)).fetchone()["c"] == 0
@@ -321,12 +327,85 @@ def test_golden_e2e_list(mini_db, tmp_path):
     conn, _ = mini_db
     _full_pipeline(conn, tmp_path)
     out = tmp_path / "list.csv"
-    m4.export_list(conn, top=100, csv_path=out, md_path=tmp_path / "list.md")
+    stats = m4.export_list(conn, top=100, csv_path=out, md_path=tmp_path / "list.md",
+                           editions_dump=tmp_path / "editions.txt.gz")
+    assert stats["titles_backfilled"] == 6
     assert out.read_text(encoding="utf-8") == GOLDEN_CSV
     md = (tmp_path / "list.md").read_text(encoding="utf-8")
     assert "| 1 | " + isbn13_for(1) + " | Poemas Açorianos | Maria Fonseca" in md
     assert out.read_text(encoding="utf-8").splitlines()[0] == \
         "isbn13,title,author,year,language,edition_count,score,rationale"
+
+
+def test_export_titles_null_without_dump(mini_db, tmp_path):
+    """No editions_dump -> candidates.title NULL, CSV emits empty, no crash."""
+    conn, _ = mini_db
+    _full_pipeline(conn, tmp_path)
+    assert conn.execute("SELECT COUNT(*) c FROM candidates "
+                        "WHERE title IS NULL").fetchone()["c"] == 6
+    out = tmp_path / "null.csv"
+    stats = m4.export_list(conn, top=100, csv_path=out)
+    assert stats["titles_backfilled"] == 0
+    lines = out.read_text(encoding="utf-8").splitlines()
+    assert lines[1] == f"{isbn13_for(1)},,Maria Fonseca,1920,por,1,8," \
+                       "editions=1(+3); lang=por(+2); era=pre-1927(+3)"
+
+
+# ------------------------------------------------------------- title backfill
+def test_backfill_multi_isbn_and_precedence(mini_db, tmp_path):
+    """One record fans out to every winner ISBN; title->full_title->subtitle."""
+    conn, _ = mini_db
+    _full_pipeline(conn, tmp_path)
+    # precedence: full_title only, subtitle only, title beats both
+    dump = tmp_path / "titles.txt.gz"
+    write_gz(dump, [
+        dump_line("/type/edition", "/books/TA", {
+            "full_title": "Full Only", "isbn_13": [isbn13_for(1)],
+            "works": [{"key": "/works/OLW1"}]}),
+        dump_line("/type/edition", "/books/TB", {
+            "subtitle": "Sub Only", "isbn_13": [isbn13_for(6)],
+            "works": [{"key": "/works/OLW5"}]}),
+        dump_line("/type/edition", "/books/TC", {
+            "title": "The Title", "full_title": "Shadowed", "subtitle": "Also",
+            "isbn_13": [isbn13_for(3), isbn13_for(4)],
+            "works": [{"key": "/works/OLW3"}]}),
+        # isbn10-only winner matched via conversion
+        dump_line("/type/edition", "/books/TD", {
+            "title": "Old Ten", "isbn_10": [isbn10_for(5)],
+            "works": [{"key": "/works/OLW4"}]}),
+    ])
+    out = tmp_path / "t.csv"
+    stats = m4.export_list(conn, top=100, csv_path=out, editions_dump=dump)
+    assert stats["titles_backfilled"] == 5  # 1 + 1 + 2 (multi-isbn) + 1
+    titles = dict(conn.execute("SELECT isbn13, title FROM candidates"
+                               ).fetchall())
+    assert titles[isbn13_for(1)] == "Full Only"
+    assert titles[isbn13_for(6)] == "Sub Only"
+    assert titles[isbn13_for(3)] == "The Title"
+    assert titles[isbn13_for(4)] == "The Title"   # multi-ISBN record fills both
+    assert titles[isbn10_to_13(isbn10_for(5))] == "Old Ten"
+
+
+def test_backfill_first_record_wins_and_absent_stays_null(mini_db, tmp_path):
+    conn, _ = mini_db
+    _full_pipeline(conn, tmp_path)
+    dump = tmp_path / "dup.txt.gz"
+    write_gz(dump, [
+        dump_line("/type/edition", "/books/X1", {
+            "title": "First Wins", "isbn_13": [isbn13_for(1)],
+            "works": [{"key": "/works/OLW1"}]}),
+        dump_line("/type/edition", "/books/X2", {
+            "title": "Second Loses", "isbn_13": [isbn13_for(1)],
+            "works": [{"key": "/works/OLW1"}]}),
+    ])
+    out = tmp_path / "d.csv"
+    m4.export_list(conn, top=100, csv_path=out, editions_dump=dump)
+    title = conn.execute("SELECT title FROM candidates WHERE isbn13=?",
+                         (isbn13_for(1),)).fetchone()["title"]
+    assert title == "First Wins"
+    # winner absent from the dump -> title stays NULL, no crash
+    assert conn.execute("SELECT title FROM candidates WHERE isbn13=?",
+                        (isbn13_for(7),)).fetchone()["title"] is None
 
 
 def test_export_list_feeds_registry_ingest(mini_db, tmp_path):
@@ -398,6 +477,13 @@ def test_cli_m4_subcommands_render_and_run(tmp_path, capsys):
         assert cli_main(["--db", db] + argv) == 0
     out = capsys.readouterr().out
     assert "7 ISBN-keyed rows" in out and "candidate(s)" in out
+    # --editions-dump parses and backfills winners' titles into the CSV
+    rc = cli_main(["--db", db, "export-list", "--top", "100",
+                   "--csv", str(tmp_path / "bt.csv"),
+                   "--editions-dump", str(tmp_path / "editions.txt.gz")])
+    assert rc == 0
+    assert f"{isbn13_for(1)},Poemas Açorianos,Maria Fonseca" in \
+        (tmp_path / "bt.csv").read_text(encoding="utf-8")
     # mutually exclusive source args rejected (argparse exits 2)
     with pytest.raises(SystemExit):
         cli_main(["--db", db, "ingest-editions"])
