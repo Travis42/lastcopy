@@ -281,34 +281,53 @@ def test_ia_plan_exact_elements_and_determinism(m5_db):
 def test_ia_executor_records_hits_and_skips_done(m5_db):
     conn = _post_ht_wd(m5_db)
     m5.build_ia_plan(conn, batch=3)
-    docs = [{"identifier": "scan-of-2", "isbn": [isbn13_for(2)]},
-            {"identifier": "scan-of-both", "isbn": [isbn13_for(5), isbn13_for(7)]},
-            {"identifier": "no-isbn-doc"}]
-    http = FakeHTTP([FakeResponse(429),
-                     FakeResponse(200, {"response": {"docs": docs}})])
+    # Two-phase flow (2026-09-30 IA incident redesign): batch probe (rows=0,
+    # numFound only) -> per-key single queries only for matching batches.
+    # responses keyed by q:
+    probe_q = conn.execute("SELECT query FROM ia_plan WHERE element_idx=0").fetchone()["query"]
+    i2, i3, i7 = isbn13_for(2), isbn13_for(3), isbn13_for(7)
+    by_q = {
+        probe_q: FakeResponse(200, {"response": {"numFound": 2, "docs": []}}),
+        f"(isbn:{i2}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-2"}]}}),
+        f"(isbn:{i3}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 0, "docs": []}}),
+        f"(isbn:{i7}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-both"}]}}),
+    }
+    http = FakeHTTP(by_q)
     out = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep)
-    # element 0 = [i2,i3,i7]: i2 hit directly, i7 via scan-of-both; i5 not in
-    # this element so its doc isbn does not attribute
+    # element 0 = [i2,i3,i7]: probe + 3 singles; i2/i7 hit, i3 resolved no-hit
     assert out == {"element": 0, "skipped_done": False, "hits": 2}
-    # rate discipline (1s) before each request + 2^0 backoff on the 429
-    assert http.sleeps == [1.0, 1.0, 1.0]
-    assert len(http.calls) == 2 and http.calls[0]["url"] == m5.IA_SEARCH_URL
+    assert len(http.calls) == 4 and http.calls[0]["url"] == m5.IA_SEARCH_URL
+    assert http.calls[0]["params"]["rows"] == 0        # probe is numFound-only
+    assert all(http.calls[i]["params"]["rows"] == 1 for i in (1, 2, 3))
+    assert all(s == 1.0 for s in http.sleeps)          # 1s rate discipline
     ia = dict(conn.execute("SELECT isbn13, ia_identifier FROM enrich_status"
                            ).fetchall())
-    assert ia[isbn13_for(2)] == "scan-of-2"
-    assert ia[isbn13_for(7)] == "scan-of-both"
-    assert ia[isbn13_for(5)] is None         # not in this element
+    assert ia[i2] == "scan-of-2"
+    assert ia[i7] == "scan-of-both"
     assert ia[isbn13_for(3)] is None         # unhit stays NULL
+    assert ia[isbn13_for(5)] is None         # not in this element
     assert ia[isbn13_for(1)] is None         # already ht-allow -> never queried
     # plan row marked done; rerun skips it with zero HTTP
     out2 = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep)
     assert out2["skipped_done"] is True and out2["hits"] == 0
-    assert len(http.calls) == 2
-    # oclc element attribution via doc oclc field
+    assert len(http.calls) == 4
+    # oclc element: probe hit -> per-oclc single resolves attribution
     m5.build_ia_plan(conn, batch=30)
     # unresolved now i3,i10,i11 -> oclcs 222(i3), 444(i10); element 1 = oclc pass
-    http2 = FakeHTTP([FakeResponse(200, {"response": {"docs": [
-        {"identifier": "oclc-scan", "oclc": ["222"]}]}})])
+    oq = conn.execute("SELECT query FROM ia_plan WHERE element_idx=1").fetchone()["query"]
+    http2 = FakeHTTP({
+        oq: FakeResponse(200, {"response": {"numFound": 1, "docs": []}}),
+        f"(oclc:222) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "oclc-scan"}]}}),
+        f"(oclc:444) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 0, "docs": []}}),
+    })
     m5.execute_ia_element(conn, 1, get=http2.get, sleep=http2.sleep)
     ia = dict(conn.execute("SELECT isbn13, ia_identifier FROM enrich_status"
                            ).fetchall())
@@ -319,6 +338,19 @@ def test_ia_executor_records_hits_and_skips_done(m5_db):
     assert conn.execute("SELECT COUNT(*) c FROM enrich_status "
                         "WHERE sources_checked LIKE '%ia%'"
                         ).fetchone()["c"] == 12
+
+
+def test_ia_executor_probe_zero_resolves_batch_without_singles(m5_db):
+    """Phase-A numFound=0 must resolve the whole batch with ONE request —
+    the entire point of the two-phase design (IA omits doc isbn fields)."""
+    conn = _post_ht_wd(m5_db)
+    m5.build_ia_plan(conn, batch=3)
+    probe_q = conn.execute("SELECT query FROM ia_plan WHERE element_idx=0").fetchone()["query"]
+    http = FakeHTTP({probe_q: FakeResponse(
+        200, {"response": {"numFound": 0, "docs": []}})})
+    out = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep)
+    assert out["hits"] == 0
+    assert len(http.calls) == 1               # no per-key singles at all
 
 
 # ------------------------------------------------------------------ stage 4
@@ -525,22 +557,19 @@ def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
     assert "AND mediatype:texts" in row["query"]
     assert row["query"].startswith("(") and row["query"].endswith(")")
 
-    # stubbed response: one real scan + one pallet container
-    class R:
-        status_code = 200
-        ok = True
-        @staticmethod
-        def json():
-            return {"response": {"docs": [
-                {"identifier": "realarchiveitem00book",
-                 "isbn": ["9780000000101"]},
-                {"identifier": "bwb_daily_pallets_2021-03-10",
-                 "isbn": ["9780000000118", "9780000000125"]},
-                {"identifier": "BWB-2024-08-28",
-                 "isbn": ["9780000000132"]},
-            ]}}
-    stats = m5.execute_ia_element(conn, 0, get=lambda url, params: R(),
-                                  sleep=lambda s: None)
+    # two-phase: probe hit -> per-ISBN singles; container ids rejected on resolve
+    def r(ident=None, n=0):
+        docs = [{"identifier": ident}] if ident else []
+        return FakeResponse(200, {"response": {"numFound": n, "docs": docs}})
+    by_q = {
+        row["query"]: r(n=3),
+        f"(isbn:9780000000101) AND mediatype:texts": r("realarchiveitem00book", 1),
+        f"(isbn:9780000000118) AND mediatype:texts": r("bwb_daily_pallets_2021-03-10", 1),
+        f"(isbn:9780000000125) AND mediatype:texts": r("BWB-2024-08-28", 1),
+        f"(isbn:9780000000132) AND mediatype:texts": r(None, 0),
+    }
+    http = FakeHTTP(by_q)
+    stats = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep)
     assert stats["hits"] == 1
     rows = conn.execute(
         "SELECT isbn13, ia_identifier FROM enrich_status "

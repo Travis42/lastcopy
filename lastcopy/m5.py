@@ -392,12 +392,42 @@ def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
     live = [i13 for i13 in isbns if not _resolved(conn, i13)]
     hits = 0
     if live:
-        params = {"q": row["query"], "rows": len(live), "output": "json",
-                  **{f"fl[{i}]": f for i, f in enumerate(IA_FL)}}
-        data = _request_json(get, params, sleep, max_retries, min_interval)
-        if data is not None:
-            hits = _record_ia_hits(conn, kind, live, keys,
-                                   data.get("response", {}).get("docs", []))
+        # Two-phase (2026-09-30 IA incident redesign): advancedsearch currently
+        # omits isbn/oclc FIELDS from returned docs, so batch-query attribution
+        # is impossible — but q= filtering and numFound remain authoritative.
+        # Phase A probes each batch with rows=0 (numFound only); phase B
+        # resolves ONLY matching batches per-key (identifier IS returned).
+        probe = _request_json(
+            get, {"q": row["query"], "rows": 0, "output": "json"},
+            sleep, max_retries, min_interval)
+        if probe is not None and int(
+                probe.get("response", {}).get("numFound", 0) or 0) > 0:
+            if kind == "isbn":
+                pairs = [(i13, f"(isbn:{i13}) AND mediatype:texts")
+                         for i13 in live]
+            else:
+                pairs = [(i13, f"(oclc:{k}) AND mediatype:texts")
+                         for k, i13 in zip(keys, live) if k]
+            for i13, single_q in pairs:
+                if _resolved(conn, i13):
+                    continue
+                data = _request_json(
+                    get, {"q": single_q, "rows": 1, "output": "json"},
+                    sleep, max_retries, min_interval)
+                docs = (data or {}).get("response", {}).get("docs", [])
+                for d in docs:
+                    if not isinstance(d, dict):
+                        continue
+                    ident = d.get("identifier")
+                    if not ident:
+                        continue
+                    if IA_CONTAINER_RE.match(str(ident)):
+                        continue   # donation pallet/container, not a scan
+                    conn.execute(
+                        "UPDATE enrich_status SET ia_identifier=? WHERE isbn13=? "
+                        "AND ia_identifier IS NULL", (str(ident), i13))
+                    hits += 1
+                    break
     conn.execute("UPDATE ia_plan SET done=1, executed_at=? WHERE element_idx=?",
                  (now(), element_idx))
     conn.commit()
@@ -431,52 +461,6 @@ def _request_json(get, params: dict, sleep, max_retries: int,
                 return None
             return None if "error" in data else data
         return None
-
-
-def _record_ia_hits(conn: sqlite3.Connection, kind: str,
-                    live_isbns: list[str], keys: list, docs: list) -> int:
-    if kind == "isbn":
-        targets = {i13: i13 for i13 in live_isbns}
-    else:
-        targets = {str(k): i13 for k, i13 in zip(keys, live_isbns) if k}
-    hits = 0
-    for d in docs:
-        if not isinstance(d, dict):
-            continue
-        ident = d.get("identifier")
-        if not ident:
-            continue
-        if IA_CONTAINER_RE.match(str(ident)):
-            continue   # donation pallet/container, not a scan
-        if kind == "isbn":
-            doc_vals = set()
-            for raw in _as_str_list(d.get("isbn")):
-                norm = normalize_isbn(raw)
-                if norm:
-                    doc_vals.add(norm[0])
-            matched = sorted(doc_vals & set(live_isbns))
-        else:
-            doc_oclcs = {str(v) for v in _as_str_list(d.get("oclc"))}
-            matched = sorted(i13 for key, i13 in targets.items() if key in doc_oclcs)
-        for i13 in matched:
-            conn.execute(
-                "UPDATE enrich_status SET ia_identifier=? WHERE isbn13=? "
-                "AND ia_identifier IS NULL", (str(ident), i13))
-            hits += 1
-    conn.commit()
-    return hits
-
-
-def _as_str_list(v) -> list[str]:
-    if v is None:
-        return []
-    vals = v if isinstance(v, list) else [v]
-    out: list[str] = []
-    for x in vals:
-        for part in _SPLIT_RE.split(str(x)):
-            if part:
-                out.append(part)
-    return out
 
 
 # ------------------------------------------------------------------ stage 4
