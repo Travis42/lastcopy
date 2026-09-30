@@ -258,7 +258,8 @@ def test_ia_plan_exact_elements_and_determinism(m5_db):
     row = conn.execute("SELECT * FROM ia_plan WHERE element_idx=0").fetchone()
     assert row["kind"] == "isbn"
     assert json.loads(row["isbns"]) == UNRESOLVED   # deterministic isbn13 ASC
-    assert row["query"] == " OR ".join(f"isbn:{v}" for v in UNRESOLVED)
+    assert row["query"] == ("(" + " OR ".join(f"isbn:{v}" for v in UNRESOLVED)
+                            + " AND mediatype:texts)")
     oclc_row = conn.execute(
         "SELECT * FROM ia_plan WHERE element_idx=1").fetchone()
     assert oclc_row["kind"] == "oclc"
@@ -509,13 +510,14 @@ def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
     m5.ensure_schema(conn)
+    _isbns = ["9780000000101", "9780000000118", "9780000000125", "9780000000132"]
     conn.executemany(
         "INSERT INTO enrich_workset (isbn13, work_key, edition_count, score) "
         "VALUES (?,?,1,8)",
-        [(f"978000000000{i}", f"/works/W{i}") for i in range(4)])
+        [(v, f"/works/W{i}") for i, v in enumerate(_isbns)])
     conn.executemany(
         "INSERT INTO enrich_status (isbn13) VALUES (?)",
-        [(f"978000000000{i}",) for i in range(4)])
+        [(v,) for v in _isbns])
     conn.commit()
 
     plan = m5.build_ia_plan(conn, batch=4)
@@ -531,11 +533,11 @@ def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
         def json():
             return {"response": {"docs": [
                 {"identifier": "realarchiveitem00book",
-                 "isbn": ["9780000000000"]},
+                 "isbn": ["9780000000101"]},
                 {"identifier": "bwb_daily_pallets_2021-03-10",
-                 "isbn": ["9780000000001", "9780000000002"]},
+                 "isbn": ["9780000000118", "9780000000125"]},
                 {"identifier": "BWB-2024-08-28",
-                 "isbn": ["9780000000003"]},
+                 "isbn": ["9780000000132"]},
             ]}}
     stats = m5.execute_ia_element(conn, 0, get=lambda url, params: R(),
                                   sleep=lambda s: None)
@@ -543,5 +545,5 @@ def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
     rows = conn.execute(
         "SELECT isbn13, ia_identifier FROM enrich_status "
         "WHERE ia_identifier IS NOT NULL").fetchall()
-    assert len(rows) == 1 and rows[0]["isbn13"] == "9780000000000"
+    assert len(rows) == 1 and rows[0]["isbn13"] == "9780000000101"
     assert rows[0]["ia_identifier"] == "realarchiveitem00book"
