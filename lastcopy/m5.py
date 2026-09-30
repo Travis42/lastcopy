@@ -15,6 +15,7 @@ EW/EX statuses are reserved for future market/holdings phases (SPEC M5
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import re
 import sqlite3
@@ -197,7 +198,9 @@ def enrich_ht(conn: sqlite3.Connection, hathifile: str | Path,
                  "isbn13 TEXT, oclc TEXT, access TEXT)")
     rows: list[tuple] = []
     n_read = n_kept = 0
-    with open(hathifile, "r", encoding="utf-8", errors="replace") as fh:
+    # gzip-aware: real hathifiles ship as .txt.gz; fixtures may be plain
+    opener = gzip.open if str(hathifile).endswith(".gz") else open
+    with opener(hathifile, "rt", encoding="utf-8", errors="replace") as fh:
         for line in fh:
             n_read += 1
             if progress_every and n_read % progress_every == 0:

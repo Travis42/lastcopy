@@ -458,3 +458,29 @@ def test_cli_m5_subcommands_render_and_run(m5_db, capsys):
     # execute mode with an unknown element errors cleanly
     rc = cli_main(["--db", db, "enrich-ia", "--execute", "99"])
     assert rc != 0
+
+
+def test_enrich_ht_gzipped_hathifile(tmp_path, monkeypatch):
+    """Regression (2026-09-30): enrich_ht read .gz hathifiles as plain text,
+    staged 0 rows, and silently marked everything CR. Real hathifiles are
+    .txt.gz — the fixture must exercise the compressed path."""
+    import gzip as _gzip
+    import sqlite3
+    from lastcopy import m5
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    m5.ensure_schema(conn)
+    conn.execute("INSERT INTO enrich_workset (isbn13, work_key, edition_count, score) "
+                 "VALUES ('9788081281587','/works/W1',1,8)")
+    conn.execute("INSERT INTO enrich_status (isbn13) VALUES ('9788081281587')")
+    conn.commit()
+    gz = tmp_path / "hathi_full_test.txt.gz"
+    with _gzip.open(gz, "wt", encoding="utf-8") as fh:
+        fh.write("htid\taccess\trights\tbib\tv\tinst\trecord\toclc\tisbn\n")
+        fh.write("mdp.1\tdeny\tic\t1\tv.1\tMIU\t9\t123\t9788081281587\n")
+    stats = m5.enrich_ht(conn, gz)
+    assert stats["staged_rows"] >= 1
+    row = conn.execute("SELECT ht_access FROM enrich_status "
+                       "WHERE isbn13='9788081281587'").fetchone()
+    assert row["ht_access"] == "deny"
