@@ -10,7 +10,8 @@ def _clean(raw: str) -> str:
 
 
 def isbn10_checksum_ok(isbn10: str) -> bool:
-    if len(isbn10) != 10 or not (isbn10[:9].isdigit() and (isbn10[9].isdigit() or isbn10[9] == "X")):
+    if len(isbn10) != 10 or not (isbn10[:9].isascii() and isbn10[:9].isdigit()
+                                 and (isbn10[9].isascii() and (isbn10[9].isdigit() or isbn10[9] == "X"))):
         return False
     total = sum(int(c) * (10 - i) for i, c in enumerate(isbn10[:9]))
     total += 10 if isbn10[9] == "X" else int(isbn10[9])
@@ -18,7 +19,7 @@ def isbn10_checksum_ok(isbn10: str) -> bool:
 
 
 def isbn13_checksum_ok(isbn13: str) -> bool:
-    if len(isbn13) != 13 or not isbn13.isdigit():
+    if len(isbn13) != 13 or not (isbn13.isascii() and isbn13.isdigit()):
         return False
     total = sum(int(c) * (1 if i % 2 == 0 else 3) for i, c in enumerate(isbn13[:12]))
     return (10 - total % 10) % 10 == int(isbn13[12])

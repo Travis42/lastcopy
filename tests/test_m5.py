@@ -484,3 +484,14 @@ def test_enrich_ht_gzipped_hathifile(tmp_path, monkeypatch):
     row = conn.execute("SELECT ht_access FROM enrich_status "
                        "WHERE isbn13='9788081281587'").fetchone()
     assert row["ht_access"] == "deny"
+
+
+def test_normalize_isbn_junk_unicode_digits():
+    """Regression (2026-09-30): hathifile junk ISBN with Unicode subscript
+    ('₂') passed .isdigit() guards then crashed int(). normalize_isbn must be
+    total: junk -> None, never raise."""
+    from lastcopy.isbn import normalize_isbn
+    assert normalize_isbn("808128158\u2082") is None        # subscript junk
+    assert normalize_isbn("\u2082" * 13) is None             # 13 unicode digits
+    assert normalize_isbn("9" * 13) is None                  # bad checksum
+    assert normalize_isbn("9788081281587") is not None       # valid still works
