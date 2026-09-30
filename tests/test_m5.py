@@ -495,3 +495,53 @@ def test_normalize_isbn_junk_unicode_digits():
     assert normalize_isbn("\u2082" * 13) is None             # 13 unicode digits
     assert normalize_isbn("9" * 13) is None                  # bad checksum
     assert normalize_isbn("9788081281587") is not None       # valid still works
+
+
+def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
+    """Regression (2026-09-30): unfiltered isbn: queries hit BWB donation
+    pallet containers (bwb_daily_pallets_*, BWB-*) — inventory items with
+    hundreds of ISBNs, NOT scans. Query must carry AND mediatype:texts and
+    result recording must reject container identifiers."""
+    import sqlite3
+    from lastcopy import m5
+
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    m5.ensure_schema(conn)
+    conn.executemany(
+        "INSERT INTO enrich_workset (isbn13, work_key, edition_count, score) "
+        "VALUES (?,?,1,8)",
+        [(f"978000000000{i}", f"/works/W{i}") for i in range(4)])
+    conn.executemany(
+        "INSERT INTO enrich_status (isbn13) VALUES (?)",
+        [(f"978000000000{i}",) for i in range(4)])
+    conn.commit()
+
+    plan = m5.build_ia_plan(conn, batch=4)
+    row = conn.execute("SELECT query FROM ia_plan WHERE element_idx=0").fetchone()
+    assert "AND mediatype:texts" in row["query"]
+    assert row["query"].startswith("(") and row["query"].endswith(")")
+
+    # stubbed response: one real scan + one pallet container
+    class R:
+        status_code = 200
+        ok = True
+        @staticmethod
+        def json():
+            return {"response": {"docs": [
+                {"identifier": "realarchiveitem00book",
+                 "isbn": ["9780000000000"]},
+                {"identifier": "bwb_daily_pallets_2021-03-10",
+                 "isbn": ["9780000000001", "9780000000002"]},
+                {"identifier": "BWB-2024-08-28",
+                 "isbn": ["9780000000003"]},
+            ]}}
+    stats = m5.execute_ia_element(conn, 0, get=lambda url, params: R(),
+                                  sleep=lambda s: None)
+    assert stats["hits"] == 1
+    rows = conn.execute(
+        "SELECT isbn13, ia_identifier FROM enrich_status "
+        "WHERE ia_identifier IS NOT NULL").fetchall()
+    assert len(rows) == 1 and rows[0]["isbn13"] == "9780000000000"
+    assert rows[0]["ia_identifier"] == "realarchiveitem00book"

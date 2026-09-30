@@ -78,6 +78,11 @@ HT_I_ISBN = HT_COLS.index("isbn")
 
 IA_SEARCH_URL = "https://archive.org/advancedsearch.php"
 IA_FL = ["identifier", "isbn", "oclc"]
+# Container/pallet items (bwb_daily_pallets_*, BWB-*) carry hundreds of ISBNs
+# each but are NOT scans — bulk-donation inventory (2026-09-30 real-data bug).
+# Query-side: AND mediatype:texts. Result-side belt-and-braces: reject ids.
+IA_CONTAINER_RE = re.compile(r"^bwb[-_]", re.IGNORECASE)
+IA_QUERY_SUFFIX = " AND mediatype:texts"
 
 STATUS_ORDER = {"CR": 0, "EN": 1, "VU": 2, "NT": 3, "DD": 4}
 PROVISIONAL_NOTE = "provisional pending Google Books verification"
@@ -336,7 +341,7 @@ def build_ia_plan(conn: sqlite3.Connection, batch: int = IA_BATCH) -> dict:
              conn.execute("SELECT isbn13 FROM plan_seed ORDER BY isbn13 ASC")]
     for i in range(0, len(isbns), batch):
         chunk = isbns[i:i + batch]
-        q = " OR ".join(f"isbn:{v}" for v in chunk)
+        q = "(" + " OR ".join(f"isbn:{v}" for v in chunk) + IA_QUERY_SUFFIX + ")"
         elems.append((idx, "isbn", q, chunk, [None] * len(chunk)))
         idx += 1
     rows = conn.execute(
@@ -344,7 +349,7 @@ def build_ia_plan(conn: sqlite3.Connection, batch: int = IA_BATCH) -> dict:
            WHERE oclc IS NOT NULL AND oclc <> '' ORDER BY isbn13 ASC""").fetchall()
     for i in range(0, len(rows), batch):
         chunk = rows[i:i + batch]
-        q = " OR ".join(f"oclc:{r['oclc']}" for r in chunk)
+        q = "(" + " OR ".join(f"oclc:{r['oclc']}" for r in chunk) + IA_QUERY_SUFFIX + ")"
         elems.append((idx, "oclc", q, [r["isbn13"] for r in chunk],
                       [r["oclc"] for r in chunk]))
         idx += 1
@@ -441,6 +446,8 @@ def _record_ia_hits(conn: sqlite3.Connection, kind: str,
         ident = d.get("identifier")
         if not ident:
             continue
+        if IA_CONTAINER_RE.match(str(ident)):
+            continue   # donation pallet/container, not a scan
         if kind == "isbn":
             doc_vals = set()
             for raw in _as_str_list(d.get("isbn")):
