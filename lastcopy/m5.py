@@ -81,7 +81,7 @@ IA_FL = ["identifier", "isbn", "oclc"]
 # Container/pallet items (bwb_daily_pallets_*, BWB-*) carry hundreds of ISBNs
 # each but are NOT scans — bulk-donation inventory (2026-09-30 real-data bug).
 # Query-side: AND mediatype:texts. Result-side belt-and-braces: reject ids.
-IA_CONTAINER_RE = re.compile(r"^bwb[-_]", re.IGNORECASE)
+IA_CONTAINER_RE = re.compile(r"^bwb", re.IGNORECASE)   # any BWB-prefixed id is a pallet/container (incl. BWB20151104Xisbn, no separator)
 IA_QUERY_SUFFIX = " AND mediatype:texts"
 
 STATUS_ORDER = {"CR": 0, "EN": 1, "VU": 2, "NT": 3, "DD": 4}
