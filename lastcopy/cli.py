@@ -443,13 +443,22 @@ def cmd_gen_candidates(args) -> int:
 
 
 def cmd_export_list(args) -> int:
-    from . import m4
+    from . import m4, m5
 
     if not args.csv and not args.md:
         print("error: pass at least one of --csv / --md", file=sys.stderr)
         return 2
     conn = m4.connect(args.db)
     try:
+        if getattr(args, "workset", False):
+            stats = m5.export_workset(conn, args.csv or
+                                      str(Path(args.md).with_suffix(".csv")),
+                                      args.md)
+            print(f"export-list: {stats['exported']:,} workset row(s) with "
+                  f"status columns -> {stats['csv']}"
+                  + (f", {stats['md']}" if stats["md"] else "")
+                  + f" ({m5.PROVISIONAL_NOTE})")
+            return 0
         stats = m4.export_list(conn, args.top, args.csv or
                                str(Path(args.md).with_suffix(".csv")), args.md,
                                editions_dump=args.editions_dump)
@@ -457,6 +466,91 @@ def cmd_export_list(args) -> int:
         conn.close()
     print(f"export-list: {stats['exported']:,} row(s) -> {stats['csv']}"
           + (f", {stats['md']}" if stats["md"] else ""))
+    return 0
+
+
+# ---------------------------------------------------------------- M5: enrichment
+def cmd_backfill_oclc(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.backfill_oclc(conn, args.file, limit=args.limit)
+    finally:
+        conn.close()
+    print(f"backfill-oclc: workset={stats['workset']:,}, "
+          f"oclc backfilled={stats['oclc_backfilled']:,}")
+    return 0
+
+
+def cmd_enrich_ht(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.enrich_ht(conn, args.hathifile)
+    finally:
+        conn.close()
+    print(f"enrich-ht: {stats['lines_read']:,} hathifile lines, "
+          f"{stats['staged_rows']:,} staged rows, "
+          f"allow={stats['ht']['allow']:,} deny={stats['ht']['deny']:,} (zero API)")
+    return 0
+
+
+def cmd_enrich_wikidata(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.enrich_wikidata(conn, args.results)
+    finally:
+        conn.close()
+    print(f"enrich-wikidata: {stats['bindings']:,} bindings, "
+          f"wd_fulltext=1 for {stats['wd_fulltext']:,} (offline parse)")
+    return 0
+
+
+def cmd_enrich_ia(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        if args.execute:
+            total = 0
+            for idx in args.execute:
+                try:
+                    stats = m5.execute_ia_element(conn, idx)
+                except ValueError as exc:
+                    print(f"error: {exc}", file=sys.stderr)
+                    conn.close()
+                    return 2
+                total += stats["hits"]
+                print(f"enrich-ia: element {stats['element']} "
+                      f"{'skipped (done)' if stats['skipped_done'] else 'executed'}, "
+                      f"hits={stats['hits']}")
+            print(f"enrich-ia: executed {len(args.execute)} element(s), "
+                  f"{total} hit(s) recorded")
+        else:
+            stats = m5.build_ia_plan(conn, batch=args.batch)
+            print(f"enrich-ia: plan written: {stats['elements']} element(s) "
+                  f"({stats['isbn_isbns']} isbn rows, "
+                  f"{stats['oclc_isbns']} oclc rows; batch={args.batch}, "
+                  f"arraysize={args.arraysize} for the runner)")
+    finally:
+        conn.close()
+    return 0
+
+
+def cmd_assign_status(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.assign_status(conn)
+    finally:
+        conn.close()
+    print(f"assign-status: {stats['assigned']:,} row(s) -> "
+          + ", ".join(f"{k}={v}" for k, v in sorted(stats["counts"].items())))
     return 0
 
 
@@ -552,7 +646,47 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--editions-dump", default=None,
                     help="local gz editions dump path; one streaming pass "
                          "backfills winners' titles (slim editions_ref stores none)")
+    sp.add_argument("--workset", action="store_true",
+                    help="export the M5 enrich_workset WITH status columns, "
+                         "ordered by severity (CR,EN,VU,NT,DD) then score DESC")
     sp.set_defaults(fn=cmd_export_list)
+
+    sp = sub.add_parser("backfill-oclc",
+                        help="stage 0: build enrich_workset (top-N candidates) "
+                             "+ stream editions dump once -> OCLC backfill (M5)")
+    sp.add_argument("--file", required=True, help="local gz editions dump path")
+    sp.add_argument("--limit", type=int, default=50_000,
+                    help="workset size (top-N by score DESC, isbn13 ASC)")
+    sp.set_defaults(fn=cmd_backfill_oclc)
+
+    sp = sub.add_parser("enrich-ht",
+                        help="stage 1: hathifiles TSV two-pass join -> ht_access (zero API, M5)")
+    sp.add_argument("--hathifile", required=True, help="hathifiles TSV path")
+    sp.set_defaults(fn=cmd_enrich_ht)
+
+    sp = sub.add_parser("enrich-wikidata",
+                        help="stage 2: offline parse of saved SPARQL JSON -> wd_fulltext (M5)")
+    sp.add_argument("--results", required=True,
+                    help="saved SPARQL JSON result file (fetched once by the runner)")
+    sp.set_defaults(fn=cmd_enrich_wikidata)
+
+    sp = sub.add_parser("enrich-ia",
+                        help="stage 3: batched IA advancedsearch plan / executor (the only "
+                             "API phase; explicit --execute required for network, M5)")
+    sp.add_argument("--batch", type=int, default=30,
+                    help="keys per advancedsearch OR-query (plan mode)")
+    sp.add_argument("--arraysize", type=int, default=1,
+                    help="array-job chunk size hint for the slurm runner (not used here)")
+    sp.add_argument("--execute", nargs="+", type=int, default=None,
+                    metavar="IDX",
+                    help="execute mode: run these ia_plan element index(es) "
+                         "with rate discipline; reruns skip done rows")
+    sp.set_defaults(fn=cmd_enrich_ia)
+
+    sp = sub.add_parser("assign-status",
+                        help="stage 4: Book Red List rules CR/EN/VU/NT/DD + "
+                             "status_basis (pure rules, no network, M5)")
+    sp.set_defaults(fn=cmd_assign_status)
     return p
 
 
