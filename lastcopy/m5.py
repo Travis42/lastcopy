@@ -506,12 +506,10 @@ def _rule(r) -> tuple[str, str]:
         return "NT", f"full digital exists ({'+'.join(full_srcs)}); artifact may still be scarce"
     edition_count = r["edition_count"] or 1
     checked = {s for s in (r["sources_checked"] or "").split(",") if s}
-    ia_checked = "ia" in checked
-    ia_hit_absent = r["ia_identifier"] is None
-    if (r["ht_access"] is None and r["wd_fulltext"] != 1 and ia_hit_absent
-            and not r["oclc"] and ia_checked):
-        return "DD", ("no signals resolvable: absent from HT/WD/IA checks; "
-                      "no OCLC; not IA-queryable")
+    if "ia" not in checked:
+        # verified-absent requires the IA pass to have actually covered this
+        # row; books lacking OCLC are NOT un-verifiable (ISBN queries suffice)
+        return "DD", "not verified: IA check never ran for this row (gap)"
     if edition_count == 1:
         return "CR", "edition_count=1; no digital in HT/IA/WD"
     if edition_count <= 3:

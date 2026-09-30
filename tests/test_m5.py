@@ -356,7 +356,7 @@ def test_ia_executor_probe_zero_resolves_batch_without_singles(m5_db):
 # ------------------------------------------------------------------ stage 4
 NT_BASIS = "full digital exists"
 CR_BASIS = "edition_count=1; no digital in HT/IA/WD"
-DD_BASIS = "no signals resolvable"
+DD_BASIS = "not verified"
 
 STATUS_CASES = [
     # (name, edition_count, ht_access, wd_fulltext, ia_identifier, oclc,
@@ -371,10 +371,10 @@ STATUS_CASES = [
     ("vu_four", 4, None, 0, None, "444", True, "VU", "edition_count=4"),
     ("vu_many", 9, None, 0, None, "444", True, "VU", "edition_count=9"),
     ("ht_deny_is_not_full", 1, "deny", 0, None, "111", True, "CR", CR_BASIS),
-    ("dd_no_signals_no_oclc", 1, None, 0, None, None, True, "DD", DD_BASIS),
-    ("dd_vu_shape", 4, None, 0, None, None, True, "DD", DD_BASIS),
+    ("dd_no_signals_no_oclc", 1, None, 0, None, None, True, "CR", CR_BASIS),  # checked+absent is CR not DD (2026-09-30 fix)
+    ("dd_vu_shape", 4, None, 0, None, None, True, "VU", "edition_count=4"),  # checked+absent (2026-09-30 fix)
     ("not_dd_when_oclc", 1, None, 0, None, "666", True, "CR", CR_BASIS),
-    ("not_dd_when_ia_unchecked", 1, None, None, None, None, False, "CR", CR_BASIS),
+    ("dd_when_ia_unchecked", 1, None, None, None, None, False, "DD", DD_BASIS),  # unchecked is the only DD now
 ]
 
 
@@ -402,7 +402,7 @@ def test_status_rules_table_driven(tmp_path, name, ec, ht, wd, ia, oclc,
 
 
 def test_assign_status_dd_requires_all_absent(tmp_path):
-    """DD wins over edition-count rules but loses to any digital signal."""
+    """DD = only when the IA check never ran; any digital signal wins NT."""
     conn = m4.connect(tmp_path / "dd.db")
     m5.ensure_schema(conn)
     for n, (ht, wd, ia, oclc) in enumerate(
@@ -417,11 +417,11 @@ def test_assign_status_dd_requires_all_absent(tmp_path):
                      (isbn13_for(n), ht, ia, wd))
     m5.assign_status(conn)
     got = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
-    assert got[isbn13_for(1)] == "DD"   # nothing resolvable
+    assert got[isbn13_for(1)] == "CR"   # checked + nothing anywhere -> CR
     assert got[isbn13_for(2)] == "CR"   # ht deny row present = partial, not DD
     assert got[isbn13_for(3)] == "NT"   # wd fulltext
     assert got[isbn13_for(4)] == "NT"   # ia hit
-    assert got[isbn13_for(5)] == "CR"   # has oclc -> queryable -> not DD
+    assert got[isbn13_for(5)] == "CR"   # oclc present, still CR
     conn.close()
 
 
@@ -576,3 +576,22 @@ def test_ia_plan_and_hits_exclude_pallet_containers(tmp_path):
         "WHERE ia_identifier IS NOT NULL").fetchall()
     assert len(rows) == 1 and rows[0]["isbn13"] == "9780000000101"
     assert rows[0]["ia_identifier"] == "realarchiveitem00book"
+
+
+def test_dd_requires_unchecked_not_missing_oclc():
+    """Regression (2026-09-30): 32,771 checked-and-absent books with no OCLC
+    were parked in DD. No-OCLC is NOT un-verifiable once the IA ISBN pass
+    covered the row; only genuinely unchecked rows are DD."""
+    import sqlite3
+    from lastcopy import m5
+
+    class Row(dict):
+        def __getitem__(self, k):
+            return dict.get(self, k)
+    # fully checked, no hits, no oclc, 1 edition -> CR (was DD before fix)
+    r = {"ht_access": None, "wd_fulltext": 0, "ia_identifier": None,
+         "sources_checked": "ht,wd,ia", "edition_count": 1, "oclc": None}
+    assert m5._rule(r)[0] == "CR"
+    # never IA-checked -> DD
+    r2 = dict(r, sources_checked="ht,wd")
+    assert m5._rule(r2)[0] == "DD"
