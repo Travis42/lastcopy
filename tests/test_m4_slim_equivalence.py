@@ -3,8 +3,12 @@ list byte-for-byte.
 
 `docs/m4-list-top50.csv` was exported from the FAT schema (titles stored in
 editions_ref) on the deterministic 10k fixture from
-`scripts/m4_golden_fixture.py` (seed 20260929, commit cf13791). This test
-rebuilds the same DB through the SLIM path — slim ingest-editions ->
+`scripts/m4_golden_fixture.py` (seed 20260929, commit cf13791), then
+regenerated through the slim path after SPEC-M4-PARSEFIX put real dump shapes
+(dict languages / varied dict authors) into the fixture — languages extract
+to identical codes, so only the author column changed (2-author and
+no-author works). This test rebuilds the same DB through the SLIM path —
+slim ingest-editions ->
 ingest-works -> gen-candidates -> export-list with the fixture editions dump
 for the one-pass title backfill — and asserts identical output.
 """

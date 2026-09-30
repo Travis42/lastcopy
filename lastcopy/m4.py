@@ -174,6 +174,27 @@ def _as_list(v) -> list:
     return v if isinstance(v, list) else [v]
 
 
+def _lang_code(l) -> str:
+    """Real dumps store languages as {"key": "/languages/eng"} (SPEC-M4-PARSEFIX);
+    older/string shapes ("/languages/eng", "eng") stay accepted."""
+    if isinstance(l, dict):
+        l = l.get("key") or ""
+    return str(l).rsplit("/", 1)[-1].strip()
+
+
+def _author_key(a) -> str | None:
+    """Real dumps store works authors as {"key": "/authors/OL1A"} and (works
+    dump) nested {"author": {"key": "/authors/OL1A"}}; plain strings accepted."""
+    if isinstance(a, str):
+        return a or None
+    if isinstance(a, dict):
+        k = a.get("key")
+        if not k and isinstance(a.get("author"), dict):
+            k = a["author"].get("key")
+        return k or None
+    return None
+
+
 def extract_edition(key: str, obj: dict) -> list[dict]:
     """Reduce an OL edition record to ISBN-keyed rows ([] if no valid ISBN).
 
@@ -190,7 +211,7 @@ def extract_edition(key: str, obj: dict) -> list[dict]:
     if not ordered:
         return []
     year = parse_year(obj.get("publish_date"))
-    langs = [str(l).rsplit("/", 1)[-1] for l in _as_list(obj.get("languages"))]
+    langs = [_lang_code(l) for l in _as_list(obj.get("languages"))]
     works = [w.get("key") for w in obj.get("works") or [] if isinstance(w, dict)]
     ia = ",".join(str(x) for x in _as_list(obj.get("ia")))
     base = dict(edition_key=key, work_key=works[0] if works else None,
@@ -211,8 +232,8 @@ def ingest_works(conn: sqlite3.Connection, works_file: str | Path,
         if key == "_summary":
             continue
         if key.startswith("/works/"):
-            akeys = json.dumps([a.get("key") for a in obj.get("authors") or []
-                                if isinstance(a, dict) and a.get("key")])
+            akeys = json.dumps([k for k in map(_author_key, obj.get("authors") or [])
+                                if k])
             batch.append((key, akeys))
             stats["works"] += 1
         if len(batch) >= BATCH:

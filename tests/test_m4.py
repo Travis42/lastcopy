@@ -58,15 +58,16 @@ BAD_ISBN13 = "9780000000000"  # checksum-invalid
 def edge_editions_lines() -> list[str]:
     return [
         # no-ia record, valid isbn13, pre-1927 non-eng -> top candidate
+        # (REAL dump shape: language as {"key": "/languages/por"})
         dump_line("/type/edition", "/books/OL1M", {
             "title": "Poemas Açorianos", "publish_date": "1920",
-            "languages": ["/languages/por"], "isbn_13": [isbn13_for(1)],
+            "languages": [{"key": "/languages/por"}], "isbn_13": [isbn13_for(1)],
             "publishers": ["Officina de Artes"], "oclc_numbers": ["123"],
             "works": [{"key": "/works/OLW1"}]}),
         # IA scan present -> must be excluded from candidates
         dump_line("/type/edition", "/books/OL2M", {
             "title": "Popular Scanned", "publish_date": "1975",
-            "languages": ["/languages/eng"], "isbn_13": [isbn13_for(2)],
+            "languages": [{"key": "/languages/eng"}], "isbn_13": [isbn13_for(2)],
             "ia": ["popularscanned00ol"], "works": [{"key": "/works/OLW2"}]}),
         # multi-isbn: two valid isbn13 -> two rows, same edition data
         dump_line("/type/edition", "/books/OL3M", {
@@ -76,12 +77,12 @@ def edge_editions_lines() -> list[str]:
         # isbn10-only -> kept via conversion
         dump_line("/type/edition", "/books/OL4M", {
             "title": "Old Ten", "publish_date": "March 1962",
-            "isbn_10": [isbn10_for(5)], "languages": ["/languages/eng"],
+            "isbn_10": [isbn10_for(5)], "languages": ["/languages/eng"],  # string back-compat
             "works": [{"key": "/works/OLW4"}]}),
         # missing publish_date -> year NULL (era unknown)
         dump_line("/type/edition", "/books/OL5M", {
             "title": "No Date", "isbn_13": [isbn13_for(6)],
-            "languages": ["/languages/deu"], "works": [{"key": "/works/OLW5"}]}),
+            "languages": [{"key": "/languages/deu"}], "works": [{"key": "/works/OLW5"}]}),
         # invalid-checksum isbn only -> dropped entirely
         dump_line("/type/edition", "/books/OL6M", {
             "title": "Broken ISBN", "isbn_13": [BAD_ISBN13],
@@ -147,6 +148,78 @@ def test_ingest_works_authors_join(mini_db):
     # nameless author skipped at ingest; export falls back to the raw key
     assert conn.execute("SELECT COUNT(*) c FROM authors_ref WHERE name IS NULL"
                         ).fetchone()["c"] == 0
+
+
+# --------------------------------------------- real-dump regression (SPEC-M4-PARSEFIX)
+def test_real_dump_language_dict_shape(tmp_path):
+    """Real dumps: languages [{"key": "/languages/eng"}] -> "eng" (2026-09-30
+    incident: str(dict) leaked "eng'}" into editions_ref and distorted ranking)."""
+    lines = [
+        dump_line("/type/edition", "/books/DL1M", {
+            "title": "Dict Eng", "publish_date": "1930",
+            "languages": [{"key": "/languages/eng"}], "isbn_13": [isbn13_for(41)],
+            "works": [{"key": "/works/OLD1"}]}),
+        dump_line("/type/edition", "/books/DL2M", {
+            "title": "Dict Other", "publish_date": "1931",
+            "languages": [{"key": "/languages/por"}], "isbn_13": [isbn13_for(42)],
+            "works": [{"key": "/works/OLD2"}]}),
+        dump_line("/type/edition", "/books/DL3M", {  # string back-compat
+            "title": "String Lang", "publish_date": "1932",
+            "languages": ["/languages/deu"], "isbn_13": [isbn13_for(43)],
+            "works": [{"key": "/works/OLD3"}]}),
+        dump_line("/type/edition", "/books/DL4M", {  # no languages -> NULL
+            "title": "No Lang", "isbn_13": [isbn13_for(44)],
+            "works": [{"key": "/works/OLD4"}]}),
+    ]
+    conn = m4.connect(tmp_path / "d.db")
+    write_gz(tmp_path / "e.txt.gz", lines)
+    m4.ingest_editions(conn, file=tmp_path / "e.txt.gz", progress_every=0)
+    langs = dict(conn.execute("SELECT isbn13, language FROM editions_ref"
+                              ).fetchall())
+    assert langs[isbn13_for(41)] == "eng"
+    assert langs[isbn13_for(42)] == "por"
+    assert langs[isbn13_for(43)] == "deu"
+    assert langs[isbn13_for(44)] is None
+    # zero dict-repr artifacts anywhere in stored rows
+    assert conn.execute("SELECT COUNT(*) c FROM editions_ref "
+                        "WHERE language LIKE '%}%'").fetchone()["c"] == 0
+    conn.close()
+
+
+def test_real_dump_works_author_dict_shape(tmp_path):
+    """Real dumps: works authors as dicts must yield /authors/OL…A keys that
+    resolve to names (2026-09-30 incident: author_keys collapsed to '[]')."""
+    works = [
+        dump_line("/type/work", "/works/OLWA", {
+            "title": "One Author",
+            "authors": [{"key": "/authors/OL123A"}]}),
+        dump_line("/type/work", "/works/OLWB", {
+            "title": "Two Authors",
+            "authors": [{"author": {"key": "/authors/OL124A"}},
+                        {"key": "/authors/OL125A"}]}),
+        dump_line("/type/work", "/works/OLWC", {"title": "No Authors"}),
+    ]
+    authors = [
+        dump_line("/type/author", "/authors/OL123A", {"name": "Real One"}),
+        dump_line("/type/author", "/authors/OL124A", {"name": "Real Two"}),
+        dump_line("/type/author", "/authors/OL125A", {"name": "Real Three"}),
+    ]
+    write_gz(tmp_path / "w.txt.gz", works)
+    write_gz(tmp_path / "a.txt.gz", authors)
+    conn = m4.connect(tmp_path / "d.db")
+    m4.ingest_works(conn, tmp_path / "w.txt.gz", tmp_path / "a.txt.gz",
+                    progress_every=0)
+    keys = dict(conn.execute("SELECT work_key, author_keys FROM works_ref"
+                             ).fetchall())
+    assert json.loads(keys["/works/OLWA"]) == ["/authors/OL123A"]
+    assert json.loads(keys["/works/OLWB"]) == ["/authors/OL124A",
+                                               "/authors/OL125A"]
+    assert json.loads(keys["/works/OLWC"]) == []
+    assert m4.resolve_authors(conn, keys["/works/OLWA"]) == "Real One"
+    assert m4.resolve_authors(conn, keys["/works/OLWB"]) == \
+        "Real Two; Real Three"
+    assert m4.resolve_authors(conn, keys["/works/OLWC"]) == ""
+    conn.close()
 
 
 # ------------------------------------------------------------- ingest-editions

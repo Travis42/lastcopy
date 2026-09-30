@@ -47,11 +47,25 @@ def main():
     w = 0
     while len(edition_lines) < n_editions:
         wkey, akey = f"/works/OL{w}W", f"/authors/OL{w}A"
-        works_lines.append(line("/type/work", wkey, {
-            "title": f"Work Number {w}", "authors": [{"key": akey}]}))
+        # REAL dump shapes (SPEC-M4-PARSEFIX): works authors are dicts; vary
+        # coverage — 1 author, 2 authors, and no-authors records all occur.
+        if w % 5 == 4:                     # authors absent
+            works_authors = None
+        elif w % 5 == 3:                   # two dict authors
+            works_authors = [{"key": akey}, {"key": f"/authors/OL{w}B"}]
+        else:                              # single dict author
+            works_authors = [{"key": akey}]
+        work_obj = {"title": f"Work Number {w}"}
+        if works_authors is not None:
+            work_obj["authors"] = works_authors
+        works_lines.append(line("/type/work", wkey, work_obj))
         authors_lines.append(line("/type/author", akey, {
             "name": rng.choice(["Ana Silva", "J. Doe", "Müller & Sons",
                                 "_unicode_作者", "O’Néill"])}))
+        if w % 5 == 3:
+            authors_lines.append(line("/type/author", f"/authors/OL{w}B", {
+                "name": rng.choice(["Ana Silva", "J. Doe", "Müller & Sons",
+                                    "_unicode_作者", "O’Néill"])}))
         # edition-count profile: most works 1-2 editions, some 5+
         n_eds = rng.choice([1, 1, 1, 1, 2, 2, 3, 5, 8])
         for e in range(n_eds):
@@ -66,7 +80,12 @@ def main():
                 ed["publish_date"] = rng.choice(
                     [str(year), f"March {year}", f"{year}-04-05"])
             if lang:
-                ed["languages"] = [f"/languages/{lang}"]
+                # REAL dump shape: languages are dicts {"key": ...}; keep a
+                # string back-compat slice (SPEC-M4-PARSEFIX)
+                if e % 4 == 3:
+                    ed["languages"] = [f"/languages/{lang}"]
+                else:
+                    ed["languages"] = [{"key": f"/languages/{lang}"}]
             if rng.random() < 0.12:  # IA scan present -> excluded from candidates
                 ed["ia"] = [f"worksNum{w:07d}{e}"]
             if rng.random() < 0.15:
