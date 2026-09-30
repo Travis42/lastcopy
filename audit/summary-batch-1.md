@@ -1,0 +1,7 @@
+# Batch 1 audit summary (rows 2-51, all status=CR)
+
+- CONFIRMED: 21 — pipeline claim "no open digital copy" holds (mostly modern in-copyright works + CDL-lending-only/pirate-only finds)
+- REFUTED: 10 — full digital copies freely readable despite CR flag: Harnack 1892 diss. (3 IA scans), Ludwig Rigveda Vol. VI 1888 (IA JaiGyan), Forget 1882 Aphraatis (2 IA scans), Spalding 1920 Music: An Art and a Language (IA goog), Leisner 1965 Megalithgräber 3. Lfg (iDAI.publications open PDF), plus work-level matches: Blaschke/Thomsen Differentialgeometrie (1921 ed, americana coll), Ritter Erdkunde von Asien (15 vols 1836-48 on IA), Wieland sämmtliche Werke (1051 vols on IA), Kant Akademie-Ausgabe (goog scans), Dunn 1837 (retitled 1839 ed)
+- UNCLEAR: 19 — dominant cause: POD/retro-eISBNs (978-0-78x/0-79x, De Gruyter 978-3-11x, Oldenbourg, Brill eISBN) completely unindexed by search engines; original work not identifiable from author+garbage year (1900/1656/1605)
+- Notable: CR rows where a *sibling edition* is fully readable (Dunn 1839, Blaschke 1921) suggest the pipeline matches editions too narrowly for POD reprints of PD works; year metadata is frequently bogus (1605/1656/1900), degrading matchability
+- Method note: verified via IA advancedsearch API + HathiTrust brief-bib API + sequential Brave searches (~2-4 lookups/row); pirate-PDF aggregator hits and IA controlled-digital-lending copies were NOT counted as freely readable full copies; DG/Springer/DAI sites JS- or PoW-blocked deeper verification

@@ -1,0 +1,51 @@
+isbn13	verdict	evidence_url	note
+9780665413087	REFUTED	https://archive.org/details/cihm_41308	OL ocaid links ISBN to IA cihm_41308 (1811 Toulouse, t.23); IA stores 10-digit ISBN
+9780781229463	REFUTED	https://archive.org/details/fieldforestgard00gray	Gray Field/Forest/Garden Botany; 1868 LC scan open; ISBN=RSC reprint of same text
+9780790574516	REFUTED	https://archive.org/details/diereligionihrw02pflegoog	Pfleiderer 1869 vol.2 Google scan NOT_IN_COPYRIGHT; ISBN=ATLA fiche of same
+9782253013570	CONFIRMED	https://openlibrary.org/isbn/9782253013570	Rosshalde Livre de Poche; in-copyright translation; IA copies borrow/community only
+9783642919893	UNCLEAR	https://openlibrary.org/books/OL27038559M	OL links IA fhrerdurchdietec00mlle but item 404/purged; DNB reading-room only; Springer paywalled
+9783296104010	CONFIRMED	https://openlibrary.org/isbn/9783296104010	Ammianus Rerum Gestarum 1963 ed.; work free in older eds but this ed. copyrighted
+9783112302446	CONFIRMED	https://www.degruyterbrill.com/serial/ephe%20ej-b/html	Le parler arabe des Juifs de Tunis (1964); De Gruyter ebook only, paid
+9787501308224	CONFIRMED	http://blog.sina.com.cn/s/blog_630771310100r4a2.html	Beijing tushuguan guji zhenben congkan (Yunli); 1987 facsimile, no free digital
+9787501313969	CONFIRMED	http://blog.sina.com.cn/s/blog_630771310100r4a2.html	Same 1987 facsimile series; no open digitization of underlying Qing MS
+9780524044667	REFUTED	https://archive.org/details/davidfriedrichst00kohuuoft	Kohut on Strauss 1908; Toronto scan open, exact title/year
+9783111297873	REFUTED	https://archive.org/details/10707884bsb	Chaptal Chemie ue. Hermbstaedt 1808 vol.1 BSB scan; exact volume (beyden ersten Theile)
+9780340013151	CONFIRMED	https://openlibrary.org/isbn/9780340013151	Oman Mary of Modena (1974 Hodder); in copyright, no digital copy
+9783111287300	REFUTED	https://books.google.de/books?id=0oswAQAAMAAJ	Lindinger Reisestudien auf Tenerife 1911; Google Books scan of same work
+9780576153867	REFUTED	https://archive.org/details/lesedificesantiq0000desg	Desgodets Edifices antiques; 1779 Jombert ed. open (Oberlin); ISBN=1969 facsimile
+9783642983535	UNCLEAR	https://openlibrary.org/isbn/9783642983535	Rheinschiffahrt 1913-25 (Springer 1925); no open scan; Springer archive page unverifiable
+9787207031723	CONFIRMED	https://www.hljszw.org.cn/	Heilongjiang sheng zhi; compiled gazetteer; only paid PDF-download sites
+9780557632268	CONFIRMED	https://openlibrary.org/isbn/9780557632268	Art of the Brick Pictorial (Lulu, modern); year 1784 is bogus metadata
+9783111278414	CONFIRMED	https://openlibrary.org/isbn/9783111278414	Allwohn Ehe des Propheten Hosea 1900; IA only has Kurtz 1859 (different work)
+9783111006659	CONFIRMED	https://openlibrary.org/isbn/9783111006659	Tolnai Ungarisches Lesebuch; IA 0 hits; De Gruyter ebook only
+9783111156224	CONFIRMED	https://www.beck-shop.de/achilles-greiff-sammlung-guttentag-buergerliches-gesetzbuch-einfuehrungsgesetz/product/21884393	Achilles/Greiff BGB commentary; no scan found; De Gruyter reprint/ebook only
+9780618439850	CONFIRMED	https://openlibrary.org/isbn/9780618439850	Williamson Macroscale/Microscale Organic Experiments; year 1900 bogus; modern text
+9783518002537	CONFIRMED	https://openlibrary.org/isbn/9783518002537	Boehme Prolegomena 1968; in copyright, no free copy
+9783662342572	UNCLEAR	https://link.springer.com/book/10.1007/978-3-662-34528-3	Fischer 1905 war surgery; Springer SBA ebook exists, no open scan; access unverifiable
+9780873950268	CONFIRMED	https://openlibrary.org/isbn/9780873950268	SUNY 1967 bilingual Martin Fierro; translation copyrighted; orig Spanish PD/free
+9781533472762	REFUTED	https://archive.org/details/india.history.resource.86942	Darwin Coral Reefs; 33 IA scans of PD text; ISBN=CreateSpace reprint
+9788488678003	CONFIRMED	https://openlibrary.org/isbn/9788488678003	Modern Spanish symposium volume (1900 bogus); no free copy
+9780320056369	CONFIRMED	https://openlibrary.org/isbn/9780320056369	Viallaneix Vigny par lui-meme (1962 Seuil); in copyright
+9782010004704	CONFIRMED	https://openlibrary.org/isbn/9782010004704	Lot Dis, comment ca marche? (1969 Hachette); no free copy
+9783642531071	CONFIRMED	https://openlibrary.org/isbn/9783642531071	Kaiser Schnitt-/Stanz- und Ziehwerkzeuge 1957; Springer paywalled, no scan
+9780790599601	UNCLEAR	https://archive.org/details/derevangelischeg0000herr	Herrmann 1890 scanned at IA but print-disabled only; HT 1896 2nd ed. record
+9783112601631	CONFIRMED	https://openlibrary.org/isbn/9783112601631	Aufwertungsgesetz volume (1925); De Gruyter ebook; statute text free but not this ed.
+9780135273418	CONFIRMED	https://openlibrary.org/isbn/9780135273418	Learning Play Viola Bk 2 (Prentice Hall); year bogus; no digital
+9784130912617	UNCLEAR	https://archive.org/details/dainihonkomonjoi184unse	Dai Nihon komonjo; series partly on IA (1904 vol.); volume for this ISBN unresolved
+9783111070988	REFUTED	https://archive.org/details/10112670bsb	Knigge Zauberschloss/Graf Tunger 1791 BSB scan open; De Gruyter reprints same text
+9780790505596	CONFIRMED	https://ixtheo.de/Record/1789914825	Bruston 1897; only catalog records; IA community item is a different 2016 work
+9798631056893	CONFIRMED	https://openlibrary.org/isbn/9798631056893	Modern Spanish Sabueso de los Baskerville; orig EN PD/free but this edition not
+9783111232829	REFUTED	https://archive.org/details/bub_gb_wjFDAAAAIAAJ	Schultz Die Pamirtadschik; Google full scan mirrored on IA (bub_gb)
+9788485511723	UNCLEAR	https://archive.org/details/manualdeliteratu0005pedr	Manual de literatura espanola; IA scan exists but print-disabled only
+9780781223201	REFUTED	https://archive.org/details/surveyofsumme00hookrich	1648 Survey of the Summe of Church-Discipline scans on IA; ISBN=RSC reprint
+9780781276412	REFUTED	https://archive.org/details/fortunesofnigel01scot	Scott Fortunes of Nigel; 1822 open scan + 104 IA items; 1893 reprint same text
+9780665451836	REFUTED	https://archive.org/details/cihm_45183	OL ocaid links ISBN to IA cihm_45183 (1781 Paris, t.18); same 10-digit ISBN issue
+9780790593036	CONFIRMED	https://openlibrary.org/isbn/9780790593036	Leo Streiflichter 1877; only unrelated titles on IA
+9788495608772	CONFIRMED	https://openlibrary.org/isbn/9788495608772	Ortiz-Oses Experiencia/existencia; modern work, no free copy
+9783111033884	CONFIRMED	https://openlibrary.org/isbn/9783111033884	Doerner StPO commentary (1934 text); De Gruyter ebook only
+9783453000896	CONFIRMED	https://openlibrary.org/isbn/9783453000896	Konsalik Strafbataillon 999; in copyright
+9780385256698	CONFIRMED	https://openlibrary.org/isbn/9780385256698	Paddler (Gratton Frost 1920 Doubleday); zero digital presence
+9780624005186	CONFIRMED	https://openlibrary.org/isbn/9780624005186	De Klerk Die jaar van die Vuur-Os 1952; Afrikaans, in copyright
+9780524046715	UNCLEAR	https://archive.org/search?query=title%3A%22Ordo+Missae%22	1911 standalone Ordo Missae not found; Ordinary readable inside PD missal scans
+9780790594521	REFUTED	https://archive.org/details/bannsianismeet00rg	de Regnon Bannesianisme et Molinisme 1890 scan open; ISBN=ATLA fiche of same
+9783112684184	UNCLEAR	https://www.degruyterbrill.com/document/doi/10.1515/9783112684184/html	Kuerschners Lit.-Kalender 1912 (34. Jg.); De Gruyter ebook; IA has other years only

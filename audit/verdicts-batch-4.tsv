@@ -1,0 +1,51 @@
+isbn13	verdict	evidence_url	note
+9780665495496	CONFIRMED	https://catalog.hathitrust.org/Record/100304048	HT full view (pd, U Alberta); title/yr 1855 exact; aeu.ark:/13960/t2n59dx4c
+9780524026427	CONFIRMED	https://catalog.hathitrust.org/Record/100450611	HT full view (pd, Harvard); "Der Begriff der Offenbarung" 1887 exact
+9780665044502	CONFIRMED	https://catalog.hathitrust.org/Record/100270711	HT full view (pd); Conseil souverain Québec notice, 1885 exact
+9780665332753	CONFIRMED	https://catalog.hathitrust.org/Record/100274609	HT full view (pd); L'Iroquoise de Caughnawaga 1858 exact
+9780524047019	UNCLEAR	https://catalog.hathitrust.org/api/volumes/brief/json/isbn:9780524047019	ISBN empty at HT; full view exists only for 1914 Sudhaus ed (US-only); row yr 1909 unverified
+9780659910998	CONFIRMED	https://catalog.hathitrust.org/Record/100299058	HT full view (pdus); Ojibway church hymn book 1905 exact
+9780665348587	CONFIRMED	https://catalog.hathitrust.org/Record/100274811	HT full view (pd); St. Antoine de Padoue 1813 exact
+9780665321887	CONFIRMED	https://catalog.hathitrust.org/Record/100264763	HT full view (pd); blank title = "Bibliotheca hispano-americana" 1870, yr matches
+9780665891410	CONFIRMED	https://catalog.hathitrust.org/Record/100307134	HT full view (pd); Oeuvre des bons livres catalogue 1845 exact
+9780524059166	CONFIRMED	https://catalog.hathitrust.org/Record/100434065	HT full view ×2 (pdus); Christus der Herr 1908 exact (Kögel)
+9780665661143	CONFIRMED	https://catalog.hathitrust.org/Record/100318705	HT full view (pdus); La culture du trèfle 1915 exact
+9780665115110	CONFIRMED	https://catalog.hathitrust.org/Record/100272126	HT full view (pd); Le vicomte C. de Léry 1867 exact
+9780524013571	CONFIRMED	https://catalog.hathitrust.org/Record/100534466	HT full view (pd); Confucius und seine Lehre 1888 exact
+9782010007705	REFUTED	https://www.amazon.com/Kippour-Ben-Porat/dp/2010007700	ISBN = "Kippour" by Ben Porat (HT rec 001243695, 1974) - NOT Alexandre Dumas 1969. Contamination
+9780665090202	CONFIRMED	https://catalog.hathitrust.org/Record/100271699	HT full view ×2 (pd); Catéchisme d'agriculture 1868 exact
+9780665815744	CONFIRMED	https://catalog.hathitrust.org/Record/100317079	HT full view (pdus); L'ami des salons 1920 exact
+9780524029541	CONFIRMED	https://catalog.hathitrust.org/Record/009007201	HT full view ×3+ (pdus); Foerster Preussische Landeskirche 1905 exact
+9780665726309	CONFIRMED	https://catalog.hathitrust.org/Record/100318295	HT full view (pd); Mosaïque 1902 exact (Girard)
+9780665327407	CONFIRMED	https://catalog.hathitrust.org/Record/100274543	HT full view (pd); Dessaules 1862 exact (Bibaud)
+9780665047756	CONFIRMED	https://catalog.hathitrust.org/Record/100270892	HT full view (pd); Voyage de Bougainville 1880 exact
+9780665444746	CONFIRMED	https://catalog.hathitrust.org/Record/100276120	HT full view (pd); Lettre circulaire clergé 1813 (Plessis) exact
+9780856981739	REFUTED	https://catalog.hathitrust.org/Record/006173430	ISBN=v70(2006): HT item LXX=ic search-only; all 40+ items seen ic; row yr 1898 = series start, conflated
+9780665420139	CONFIRMED	https://catalog.hathitrust.org/Record/100275843	HT full view (pd); Atlas Malte-Brun 1812 exact
+9780665812811	CONFIRMED	https://catalog.hathitrust.org/Record/100317154	HT full view (pdus); Devoirs des secrétaires-trésoriers 1919 exact
+9781844197002	CONFIRMED	https://archive.org/details/phonics1practice0000unse	IA live; "Phonics 1 Practice" Fidge/Moorcroft exact, public EPUB; yr 1800 bogus
+9780665299643	CONFIRMED	https://catalog.hathitrust.org/Record/100277383	HT full view ×2 (pd); "System of temporal retribution" 1841 (Wishart) matches
+9781133273448	CONFIRMED	https://archive.org/details/essentialsofmark0000barr	IA live; Babin/Zikmund "Essentials of Mktg Research 5e" exact; public PDF+EPUB
+9780665328077	CONFIRMED	https://catalog.hathitrust.org/Record/100274558	HT full view (pd); médaille miraculeuse 1834 exact
+9780665116087	CONFIRMED	https://catalog.hathitrust.org/Record/100272156	HT full view ×2 (pd); La cité du mal 1881 exact (Paquin)
+9780665414398	CONFIRMED	https://catalog.hathitrust.org/Record/100275736	HT full view ×2 (pd); Mémoires de John Tanner 1835 exact
+9781844193448	UNCLEAR	https://archive.org/details/english0000head	IA live "English" Head, Alison but lending-only (PDF/EPUB private, LCP); BWB shows ISBN ...4343 not ...4348
+9780665436482	CONFIRMED	https://catalog.hathitrust.org/Record/100276017	HT full view (pd); Traité de paix France-Savoye 1713 exact
+9780837019314	CONFIRMED	https://catalog.hathitrust.org/Record/006661790	HT full view (pd, uc1.b3472219); Hummelauer 1897 exact; rec has no ISBN (why API missed)
+9783486583533	REFUTED	https://catalog.hathitrust.org/Record/100726412	ISBN=v5pt1(2007): ic search-only at all holders (chi/msu/hvd); full view only other vols (Abt.1/3)
+9783110014112	CONFIRMED	https://catalog.hathitrust.org/Record/002040336	HT CIL IV (Mau); 1 pd full-view item of 7; ISBN=Suppl. pars II; series-level rec, vol mapping fuzzy
+9780665948633	CONFIRMED	https://catalog.hathitrust.org/Record/100307980	HT full view (pd); Shehyn budget 1890 exact
+9780665301995	CONFIRMED	https://catalog.hathitrust.org/Record/100274355	HT full view (pd); "Les États de Jersey" 1893 (Faucher de St-Maurice) matches
+9780837077017	CONFIRMED	https://catalog.hathitrust.org/Record/100567014	HT full view (pd, Harvard); Grotefend Keilinschriften 1852 exact
+9780665899386	CONFIRMED	https://catalog.hathitrust.org/Record/100307170	HT full view (pd); Formulaire de prières 1847 exact
+9780665948244	CONFIRMED	https://catalog.hathitrust.org/Record/100307974	HT full view (pd); Réception de l'orgue Montréal 1864 (Warren) exact
+9780665117527	CONFIRMED	https://catalog.hathitrust.org/Record/100272222	HT full view (pd); Palmieri Philosophie 1897 exact
+9780665057304	CONFIRMED	https://catalog.hathitrust.org/Record/100271114	HT full view (pd); Vallée de la Lièvre 1884 (Benoit) exact
+9780665022005	CONFIRMED	https://catalog.hathitrust.org/Record/100269827	HT full view (pd); Comité catholique 1884 (frère Arnold) exact
+9780665458064	CONFIRMED	https://catalog.hathitrust.org/Record/100276346	HT full view (pd); Lettre pastorale 1850 (Bourget) exact
+9780665299346	CONFIRMED	https://catalog.hathitrust.org/Record/100264104	HT full view (pd); blank title = "Dominion accountant" 1873, yr matches
+9780665948824	CONFIRMED	https://catalog.hathitrust.org/Record/100307991	HT full view (pd); Noces d'or SSJB 1884 exact
+9780790594057	CONFIRMED	https://catalog.hathitrust.org/Record/100371698	HT full view (pdus, Harvard); Antipriscilliana 1905 exact (Künstle)
+9780790597751	CONFIRMED	https://catalog.hathitrust.org/Record/100542254	HT full view (pd, Harvard); Christliche Eschatologie 1886 exact (Kliefoth)
+9780665726187	CONFIRMED	https://catalog.hathitrust.org/Record/100318299	HT full view (pdus); Conférences, discours, lettres 1919 (Delâge) exact
+9780665723797	CONFIRMED	https://catalog.hathitrust.org/Record/100318338	HT full view (pdus); Étude sommaire sur les céréales 1916 (Savoie) exact

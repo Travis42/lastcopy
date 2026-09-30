@@ -1,0 +1,51 @@
+isbn13	verdict	evidence_url	note
+9781535808651	REFUTED	https://archive.org/details/principlesteach00dunngoog	Popular Education 1837; retitled 1839 ed "Principles of Teaching" full view IA
+9780781248037	UNCLEAR	https://www.google.com/search?q=isbn:9780781248037	POD ISBN unindexed (Brave, OpenLibrary, IA); original work unidentified
+9783642505133	REFUTED	https://archive.org/details/vorlesungenberdi00blas	Vorlesungen Differentialgeometrie 1921 ed (Blaschke/Thomsen) full view IA, americana coll
+9783447026109	CONFIRMED	https://www.degruyterbrill.com/serial/rerkas-b/html	Harrassowitz AF-series Tibet monograph (year 1900 bogus, ~1977-99); commerce/review only
+9780237491833	CONFIRMED	https://www.google.com/search?q=isbn:9780237491833	Waterhouse 1963 novel (in copyright); ISBN unindexed; no digital found
+9783642896897	UNCLEAR	https://archive.org/search?query=Form%C3%A1nek	Veit/Springer 1918 Formanek title unidentified; IA has 1930 ed of likely work as DLI lending
+9782711607143	CONFIRMED	https://philpapers.org/rec/DESSDB	Summa de bono Livre 1 Vrin 1930; commerce/scholarly refs only, no free copy
+9783622913587	CONFIRMED	https://saebi.isgv.de/biografie/Manfred_von_Ardenne_(1907-1997)	1944 Isotope-Indikatoren monograph (Springer SBM paywalled); no free copy found
+9780798137768	UNCLEAR	https://www.google.com/search?q=isbn:9780798137768	POD ISBN unindexed; Howgrave-Graham work unidentified
+9780524076125	REFUTED	https://archive.org/details/india.history.resource.118389	Exact match: Rigveda Vol VI Register 1888 Ludwig, IA IndiaHistory/JaiGyan open coll
+9781322207803	CONFIRMED	https://archive.org/search?query=9781322207803	Lulu POD "Museen schlagen Bruecken" (Thiemann); nothing on IA; commerce only
+9783161374920	CONFIRMED	https://www.abebooks.co.uk/9783161374920/Christologie-Neuen-Testaments-Cullmann-Oscar-3161374924/plp	Cullmann Christologie NT (Mohr); commerce only; pirate-PDF hits excluded
+9788948001013	CONFIRMED	https://www.google.com/search?q=isbn:9788948001013	Korean Choe Hangi vol, HT=deny (search-only); nothing free found
+9781594864599	CONFIRMED	https://archive.org/details/paleodietforathl0000cord_f1i7	Paleo Diet for Athletes (2005, year 1605 bogus); IA CDL lending only, no open copy
+9783428003570	UNCLEAR	https://www.google.com/search?q=isbn:9783428003570	1966 Elle title unidentified; ISBN unindexed
+9780852790236	CONFIRMED	https://archive.org/search?query=9780852790236	Fairfield 1954; IA has only BWB pallet refs; no digital
+9780621012040	CONFIRMED	https://archive.org/search?query=9780621012040	Ntunguru SA Native Language Bureau; nothing on IA; obscure govt imprint
+9780790518831	REFUTED	https://archive.org/details/diegriechischeue00harn	Exact 1892 Harnack dissertation, 2 full-view IA scans + OKC-funded scan
+9782702400937	CONFIRMED	https://www.google.com/search?q=isbn:9782702400937	Exbrayat 1962 (d.1989, in copyright); ISBN unindexed; no digital
+9783111056531	REFUTED	https://archive.org/details/india.history.resource.37692	Ritter Iranische Welt=Erdkunde von Asien; 15 vols 1836-48 on IA, 1840 vol open JaiGyan
+9783111256351	UNCLEAR	https://www.google.com/search?q=isbn:9783111256351	DG legacy ISBN unindexed; Einem work unidentified
+9783486778106	CONFIRMED	https://www.degruyter.com/document/doi/10.1515/9783486778113/html?lang=en	Oldenbourg 1950 von Ficker musicology (DG retro eBook paywalled); no free copy
+9783112303313	UNCLEAR	https://www.google.com/search?q=isbn:9783112303313	DAI 1969 DG title unidentified (ISBN unindexed); DAI repos not searchable via API
+9780618126033	CONFIRMED	https://archive.org/search?query=9780618126033	Bellesiles Arming America (2000, year bogus); commerce only
+9783111039077	REFUTED	https://archive.org/details/bub_gb_o2BJAAAAYAAJ	Wieland saemmtliche Werke (Gruber ed) massively digitized IA; exact DG vol unverified
+9780719509957	UNCLEAR	https://openlibrary.org/search.json?q=george+paston	Paston 1932 work unidentifiable in OL; ISBN unindexed
+9780320060939	CONFIRMED	https://www.google.com/search?q=isbn:9780320060939	Horrent 1966 (in copyright); ISBN unindexed; no digital
+9783110994971	CONFIRMED	https://www.google.com/search?q=isbn:9783110994971	Karch Texte aus Heidelberg/Worms; DG paywalled ebook only
+9780781244688	UNCLEAR	https://archive.org/search?query=9780781244688	POD unindexed; Penington 1841 work unidentified
+9780790599243	REFUTED	https://archive.org/details/devitaetscriptis00forguoft	Exact 1882 Forget Aphraatis dissertation; 2 full-view IA scans (uoft+goog)
+9783628583728	UNCLEAR	https://openlibrary.org/search.json?author=Choiseul-Meuse	Choiseul-Meuse 1822 title not in OL (works 1810-18 digitized only); ISBN unindexed
+9780524020487	CONFIRMED	https://abuss.narod.ru/Biblio/rosenberg/rosenberg.htm	Rozenberg 1916 Petrograd; only 1991 Soviet compilation PDFs, no free scan of original
+9782743446574	UNCLEAR	https://www.google.com/search?q=isbn:9782743446574	No author, 1656, ISBN unindexed; unidentifiable
+9789004559523	UNCLEAR	https://www.google.com/search?q=isbn:9789004559523	Brill eISBN unindexed; Holwerda 1896 title unidentifiable
+9780950033129	CONFIRMED	https://archive.org/search?query=9780950033129	OB Ghradaigh 1968 Irish; nothing on IA; obscure self-pub imprint
+9783103973228	CONFIRMED	https://www.google.com/search?q=isbn:9783103973228	Kolbe (b.1957, in copyright); ISBN unindexed; no digital
+9783112505779	UNCLEAR	https://archive.org/search?query=9783112505779	Anonymous 1885 DG title unidentified; ISBN unindexed
+9783111092461	UNCLEAR	https://www.google.com/search?q=isbn:9783111092461	DG legacy ISBN unindexed; Hellmann work unidentified
+9783111312460	UNCLEAR	https://www.google.com/search?q=isbn:9783111312460	DG legacy ISBN unindexed; Harnack work unidentified
+9783525254226	CONFIRMED	https://www.google.com/search?q=isbn:9783525254226	Andronikos 1968 German monograph (d.1992); ISBN unindexed; no digital
+9783112155745	REFUTED	https://publications.dainst.org/books/dai/catalog/book/124	Leisner Megalithgraeber 3.Lfg (1965): open digital reproduction at iDAI.publications
+9783111227245	UNCLEAR	https://www.google.com/search?q=isbn:9783111227245	DG legacy ISBN unindexed; Veith work unidentified
+9788416794515	UNCLEAR	https://www.google.com/search?q=isbn:9788416794515	"VELPISTER" author nonsense; ISBN unindexed; unidentifiable
+9780618126729	UNCLEAR	https://www.google.com/search?q=isbn:9780618126729	HMCo ISBN unindexed; "JACOBS" author too generic to verify
+9783112657195	CONFIRMED	https://www.google.com/search?q=isbn:9783112657195	E German agricultural academy 1968; ISBN unindexed; no digital
+9780781291323	REFUTED	https://archive.org/details/musicanartandal00spalgoog	Spalding "Music: An Art and a Language" 1920 full view IA (Google scan)
+9783111262673	UNCLEAR	https://www.google.com/search?q=isbn:9783111262673	DG legacy ISBN unindexed; Herg 1933 work unidentified
+9788971051924	CONFIRMED	https://www.google.com/search?q=isbn:9788971051924	Korean academic monograph; ISBN unindexed outside commerce; no digital
+9783111183299	UNCLEAR	https://www.google.com/search?q=isbn:9783111183299	DG legacy ISBN unindexed; Suchier work unidentified
+9783111262864	REFUTED	https://archive.org/details/kantsgesammelte06kantgoog	Kant = Akademie-Ausgabe vols digitized full view on IA (goog scans); exact vol unverified
