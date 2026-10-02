@@ -441,7 +441,7 @@ def test_export_workset_header_order_note(m5_db, tmp_path, capsys):
     assert rc == 0
     lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ("isbn13,title,author,year,language,edition_count,"
-                        "score,status,status_basis")
+                        "score,status,status_basis,gb_status")
     assert lines[-1] == f"# {m5.PROVISIONAL_NOTE}"
     body = [ln.split(",")[0] for ln in lines[1:-1]]
     st = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
@@ -595,3 +595,193 @@ def test_dd_requires_unchecked_not_missing_oclc():
     # never IA-checked -> DD
     r2 = dict(r, sources_checked="ht,wd")
     assert m5._rule(r2)[0] == "DD"
+
+
+# --------------------------------------------------- M5.5: ocaid-sweep
+def _ed_ia(key: str, work: str, ia: str) -> str:
+    """An edition record carrying a cross-edition ia (ocaid) link — the
+    audit's false-CR shape: WORK's original edition has the free scan,
+    the workset ISBN (reprint) does not."""
+    return dump_line("/type/edition", f"/books/{key}",
+                     {"title": f"Ed {key}", "publish_date": "1930",
+                      "ia": [ia], "works": [{"key": work}]})
+
+
+def test_ocaid_sweep_cross_edition_upgrade(m5_db, tmp_path):
+    conn, _ = m5_db
+    m5.build_workset(conn)
+    dump = write_gz(tmp_path / "editions_ocaid.txt.gz", EDITIONS + [
+        _ed_ia("EX1", "/works/OW1", "scan123"),        # same work as isbn13_for(1)
+        _ed_ia("EXZ", "/works/OWZ", "ignored456"),     # work outside the workset
+    ])
+    stats = m5.ocaid_sweep(conn, dump, progress_every=0)
+    assert stats["records_read"] == len(EDITIONS) + 2
+    assert stats["works_with_ocaid"] == 1              # only OW1 staged
+    assert stats["upgraded"] == 1
+    row = conn.execute("SELECT ia_identifier, ia_source FROM enrich_status "
+                       "WHERE isbn13=?", (isbn13_for(1),)).fetchone()
+    assert row["ia_identifier"] == "scan123"
+    assert row["ia_source"] == "ocaid"
+    # works outside the set are ignored entirely
+    assert conn.execute("SELECT COUNT(*) c FROM ocaid_stage "
+                        "WHERE work_key='/works/OWZ'").fetchone()["c"] == 0
+    # untouched rows keep NULL ia_source; assign-status derives NT from the
+    # ocaid-sourced ia_identifier (no rule changes needed)
+    n_null = conn.execute("SELECT COUNT(*) c FROM enrich_status "
+                          "WHERE ia_source IS NULL").fetchone()["c"]
+    assert n_null == 11
+    m5.assign_status(conn)
+    st = conn.execute("SELECT status, status_basis FROM enrich_status "
+                      "WHERE isbn13=?", (isbn13_for(1),)).fetchone()
+    assert st["status"] == "NT" and "ia hit" in st["status_basis"]
+    # idempotent: rerunning the pass upgrades nothing new
+    stats2 = m5.ocaid_sweep(conn, dump, progress_every=0)
+    assert stats2["upgraded"] == 1
+
+
+def test_ocaid_sweep_max_records_canary_cap(m5_db, tmp_path):
+    conn, _ = m5_db
+    m5.build_workset(conn)
+    dump = write_gz(tmp_path / "editions_cap.txt.gz",
+                    EDITIONS + [_ed_ia("EX1", "/works/OW1", "scan123")])
+    stats = m5.ocaid_sweep(conn, dump, max_records=3, progress_every=0)
+    assert stats["records_read"] == 3                 # cap honored
+    assert stats["works_with_ocaid"] == 0 and stats["upgraded"] == 0
+    assert conn.execute("SELECT COUNT(*) c FROM ocaid_stage"
+                        ).fetchone()["c"] == 0
+    assert conn.execute("SELECT ia_identifier FROM enrich_status WHERE "
+                        "isbn13=?", (isbn13_for(1),)).fetchone()[0] is None
+    # full pass afterwards still lands the upgrade
+    stats2 = m5.ocaid_sweep(conn, dump, progress_every=0)
+    assert stats2["upgraded"] == 1
+
+
+# --------------------------------------------------- M5.5: gb-trickle
+def _gb_db(tmp_path, rows):
+    """rows = [(isbn13, status, score)] -> workset + status rows."""
+    conn = m4.connect(tmp_path / "gb.db")
+    m5.ensure_schema(conn)
+    for i, (i13, status, score) in enumerate(rows):
+        conn.execute("INSERT INTO enrich_workset (isbn13, work_key, "
+                     "edition_count, score, oclc, created_at) "
+                     "VALUES (?,?,1,?,NULL,?)", (i13, f"/works/G{i}", score, m5.now()))
+        conn.execute("INSERT INTO enrich_status (isbn13, status) "
+                     "VALUES (?,?)", (i13, status))
+    conn.commit()
+    return conn
+
+
+def _gb_resp(items):
+    return FakeResponse(200, {"totalItems": len(items), "items": items})
+
+
+def test_gb_trickle_statuses_budget_priority_resume(tmp_path, monkeypatch):
+    from lastcopy.sources.gbooks import KEY_ENV
+
+    monkeypatch.delenv(KEY_ENV, raising=False)
+    key_file = tmp_path / "gbooks.key"
+    key_file.write_text("TESTKEY", encoding="utf-8")
+    i_cr_hi, i_cr_lo, i_nt, i_en = (isbn13_for(n) for n in (2, 1, 4, 3))
+    conn = _gb_db(tmp_path, [(i_cr_hi, "CR", 9), (i_cr_lo, "CR", 5),
+                             (i_nt, "NT", 99), (i_en, "EN", 7)])
+    by_q = {
+        f"isbn:{i_cr_hi}": _gb_resp([   # results, preview only -> metadata
+            {"id": "volCRhi", "volumeInfo": {"title": "x"},
+             "accessInfo": {"viewability": "PARTIAL"}}]),
+        f"isbn:{i_cr_lo}": _gb_resp([]),                     # 0 results -> none
+        f"isbn:{i_nt}": _gb_resp([   # full view -> full + identifier
+            {"id": "volNT", "volumeInfo": {},
+             "accessInfo": {"viewability": "FULL_PUBLIC_DOMAIN"}}]),
+    }
+    http = FakeHTTP(by_q)
+    out = m5.gb_trickle(conn, 2, key_file=key_file, get=http.get,
+                        sleep=http.sleep)
+    # budget 2 with 4 eligible: CR-first then score DESC -> cr_hi, cr_lo only
+    assert out["queried"] == 2
+    assert out["counts"] == {"metadata": 1, "none": 1}
+    assert len(http.calls) == 2
+    assert all(c["url"] == m5.GB_VOLUMES_URL for c in http.calls)
+    assert all(c["params"]["key"] == "TESTKEY" for c in http.calls)
+    assert [c["params"]["q"] for c in http.calls] == \
+        [f"isbn:{i_cr_hi}", f"isbn:{i_cr_lo}"]
+    assert all(s == 1.0 for s in http.sleeps)          # ~1 req/s discipline
+    got = dict(conn.execute("SELECT isbn13, gb_status FROM enrich_status"
+                            ).fetchall())
+    assert got[i_cr_hi] == "metadata" and got[i_cr_lo] == "none"
+    assert got[i_nt] is None and got[i_en] is None     # never reached
+    ident = dict(conn.execute("SELECT isbn13, gb_identifier FROM enrich_status"
+                              ).fetchall())
+    assert ident[i_cr_hi] == "volCRhi" and ident[i_cr_lo] is None
+    # resume: rerun skips set rows, finishes the rest
+    by_q2 = {
+        f"isbn:{i_nt}": _gb_resp([{"id": "volNT",
+                                   "accessInfo": {"viewability":
+                                                  "FULL_PUBLIC_DOMAIN"}}]),
+        f"isbn:{i_en}": _gb_resp([]),
+    }
+    http2 = FakeHTTP(by_q2)
+    out2 = m5.gb_trickle(conn, 10, key_file=key_file, get=http2.get,
+                         sleep=http2.sleep)
+    assert out2["queried"] == 2 and out2["counts"] == {"full": 1, "none": 1}
+    assert f"isbn:{i_cr_hi}" not in [c["params"]["q"] for c in http2.calls]
+    got = dict(conn.execute("SELECT isbn13, gb_status FROM enrich_status"
+                            ).fetchall())
+    assert got[i_nt] == "full" and got[i_en] == "none"
+    conn.close()
+
+
+def test_gb_trickle_missing_key_raises(tmp_path, monkeypatch):
+    from lastcopy.sources.gbooks import KeyRequiredError, KEY_ENV
+
+    monkeypatch.delenv(KEY_ENV, raising=False)
+    monkeypatch.setattr(m5, "GB_KEY_DEFAULT_FILES", ())  # skip server paths
+    conn = _gb_db(tmp_path, [(isbn13_for(1), "CR", 5)])
+    with pytest.raises(KeyRequiredError):
+        m5.gb_trickle(conn, 1, key_file=tmp_path / "missing.key")
+
+
+# ------------------------------------------- M5.5: export note + gb column
+def test_export_workset_dynamic_provisional_note(m5_db, tmp_path):
+    conn, _ = m5_db
+    m5.build_workset(conn)
+    # all rows gb-verified -> provisional clause dropped
+    conn.execute("UPDATE enrich_status SET gb_status='none'")
+    conn.commit()
+    csv_path, md_path = tmp_path / "ws.csv", tmp_path / "ws.md"
+    stats = m5.export_workset(conn, csv_path, md_path)
+    assert stats["gb_pending"] is False
+    lines = csv_path.read_text(encoding="utf-8").splitlines()
+    assert lines[0].endswith(",gb_status")
+    assert lines[-1].startswith("978")               # data row, no note line
+    assert "none" in lines[1].split(",")
+    md = md_path.read_text(encoding="utf-8")
+    assert "provisional" not in md and "gb_status" in md
+    # any unverified row -> the provisional note returns
+    conn.execute("UPDATE enrich_status SET gb_status=NULL "
+                 "WHERE isbn13=?", (isbn13_for(1),))
+    conn.commit()
+    stats2 = m5.export_workset(conn, csv_path, md_path)
+    assert stats2["gb_pending"] is True
+    lines2 = csv_path.read_text(encoding="utf-8").splitlines()
+    assert lines2[-1] == f"# {m5.PROVISIONAL_NOTE}"
+    assert m5.PROVISIONAL_NOTE in md_path.read_text(encoding="utf-8")
+
+
+def test_cli_ocaid_sweep_and_gb_trickle_render(m5_db, tmp_path, capsys,
+                                               monkeypatch):
+    from lastcopy.sources.gbooks import KEY_ENV, KeyRequiredError
+
+    conn, _ = m5_db
+    m5.build_workset(conn)
+    db = str(tmp_path / "m5.db")
+    dump = write_gz(tmp_path / "editions_ocaid.txt.gz",
+                    EDITIONS + [_ed_ia("EX1", "/works/OW1", "scan123")])
+    assert cli_main(["--db", db, "ocaid-sweep", "--file", dump]) == 0
+    out = capsys.readouterr().out
+    assert "ocaid-sweep" in out and "upgraded" in out
+    assert cli_main(["--db", db, "ocaid-sweep", "--file", dump,
+                     "--max-records", "2"]) == 0
+    monkeypatch.delenv(KEY_ENV, raising=False)
+    with pytest.raises(KeyRequiredError):
+        cli_main(["--db", db, "gb-trickle", "--budget", "10",
+                  "--key-file", str(tmp_path / "missing.key")])

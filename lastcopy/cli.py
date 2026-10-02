@@ -457,7 +457,8 @@ def cmd_export_list(args) -> int:
             print(f"export-list: {stats['exported']:,} workset row(s) with "
                   f"status columns -> {stats['csv']}"
                   + (f", {stats['md']}" if stats["md"] else "")
-                  + f" ({m5.PROVISIONAL_NOTE})")
+                  + (f" ({m5.PROVISIONAL_NOTE})" if stats.get("gb_pending")
+                     else " (GB verification complete)"))
             return 0
         stats = m4.export_list(conn, args.top, args.csv or
                                str(Path(args.md).with_suffix(".csv")), args.md,
@@ -551,6 +552,35 @@ def cmd_assign_status(args) -> int:
         conn.close()
     print(f"assign-status: {stats['assigned']:,} row(s) -> "
           + ", ".join(f"{k}={v}" for k, v in sorted(stats["counts"].items())))
+    return 0
+
+
+def cmd_ocaid_sweep(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.ocaid_sweep(conn, args.file, max_records=args.max_records)
+    finally:
+        conn.close()
+    print(f"ocaid-sweep: {stats['records_read']:,} records read, "
+          f"{stats['works_with_ocaid']:,} work(s) with ocaid, "
+          f"{stats['upgraded']:,} workset ISBN(s) upgraded "
+          f"(ia_source='ocaid')")
+    return 0
+
+
+def cmd_gb_trickle(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.gb_trickle(conn, args.budget, key_file=args.key_file)
+    finally:
+        conn.close()
+    print(f"gb-trickle: {stats['queried']} queried (budget {args.budget}) -> "
+          + ", ".join(f"{k}={v}" for k, v in sorted(stats["counts"].items()))
+          + "; resumable (rows with gb_status set are skipped)")
     return 0
 
 
@@ -687,6 +717,28 @@ def build_parser() -> argparse.ArgumentParser:
                         help="stage 4: Book Red List rules CR/EN/VU/NT/DD + "
                              "status_basis (pure rules, no network, M5)")
     sp.set_defaults(fn=cmd_assign_status)
+
+    sp = sub.add_parser("ocaid-sweep",
+                        help="stage 3b (M5.5): stream the editions dump once, "
+                             "stage cross-edition work ia/ocaid links, upgrade "
+                             "workset ia_identifier (ia_source='ocaid')")
+    sp.add_argument("--file", required=True,
+                    help="local gz editions dump path (same fixtures as ingest-editions)")
+    sp.add_argument("--max-records", type=int, default=None,
+                    help="cap the stream after N records (canary runs)")
+    sp.set_defaults(fn=cmd_ocaid_sweep)
+
+    sp = sub.add_parser("gb-trickle",
+                        help="stage 3c (M5.5): budgeted Google Books "
+                             "verification -> gb_status/gb_identifier "
+                             "(CR-first, ~1 req/s, resumable)")
+    sp.add_argument("--budget", type=int, required=True,
+                    help="max requests this run (scrontab: 1000/day)")
+    sp.add_argument("--key-file", default=None,
+                    help="Google Books key file (default: "
+                         "/root/projects/lastcopy/secrets/gbooks.key, "
+                         "then ~/.config/lastcopy/gbooks.key)")
+    sp.set_defaults(fn=cmd_gb_trickle)
     return p
 
 

@@ -46,12 +46,20 @@ CREATE TABLE IF NOT EXISTS enrich_status (
   isbn13 TEXT PRIMARY KEY,
   ht_access TEXT,
   ia_identifier TEXT,
+  ia_source TEXT,
   wd_fulltext INTEGER,
   gb_status TEXT,
+  gb_identifier TEXT,
   sources_checked TEXT,
   checked_at TEXT,
   status TEXT,
   status_basis TEXT
+);
+CREATE TABLE IF NOT EXISTS ocaid_stage (
+  work_key TEXT NOT NULL,
+  ocaid TEXT NOT NULL,
+  edition_key TEXT NOT NULL,
+  PRIMARY KEY (work_key, edition_key)
 );
 CREATE TABLE IF NOT EXISTS ia_plan (
   element_idx INTEGER PRIMARY KEY,
@@ -96,6 +104,14 @@ def now() -> str:
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    # M5.5 migration: ia_source / gb_identifier on pre-existing DBs
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(enrich_status)")}
+    for col in ("ia_source", "gb_identifier"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
+    # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
+    conn.execute("UPDATE enrich_status SET ia_source='search' "
+                 "WHERE ia_identifier IS NOT NULL AND ia_source IS NULL")
     conn.commit()
 
 
@@ -424,8 +440,9 @@ def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
                     if IA_CONTAINER_RE.match(str(ident)):
                         continue   # donation pallet/container, not a scan
                     conn.execute(
-                        "UPDATE enrich_status SET ia_identifier=? WHERE isbn13=? "
-                        "AND ia_identifier IS NULL", (str(ident), i13))
+                        "UPDATE enrich_status SET ia_identifier=?, ia_source='search' "
+                        "WHERE isbn13=? AND ia_identifier IS NULL",
+                        (str(ident), i13))
                     hits += 1
                     break
     conn.execute("UPDATE ia_plan SET done=1, executed_at=? WHERE element_idx=?",
@@ -444,11 +461,12 @@ def _resolved(conn: sqlite3.Connection, isbn13: str) -> bool:
 
 
 def _request_json(get, params: dict, sleep, max_retries: int,
-                  min_interval: float = IA_MIN_INTERVAL):
+                  min_interval: float = IA_MIN_INTERVAL,
+                  url: str = IA_SEARCH_URL):
     attempt = 0
     while True:
         sleep(min_interval)          # rate discipline: <=1 req/s
-        resp = get(IA_SEARCH_URL, params)
+        resp = get(url, params)
         if resp.status_code in (429, 503) and attempt < max_retries - 1:
             backoff = 2.0 ** attempt  # exponential backoff on 429/503
             sleep(backoff)
@@ -461,6 +479,163 @@ def _request_json(get, params: dict, sleep, max_retries: int,
                 return None
             return None if "error" in data else data
         return None
+
+
+# ------------------------------------------------- stage 3b (M5.5): ocaid sweep
+def ocaid_sweep(conn: sqlite3.Connection, dump: str | Path,
+                max_records: int | None = None,
+                progress_every: int = 1_000_000) -> dict:
+    """Cross-edition ocaid pass (SPEC-M5.5 Change 1): stream the editions
+    dump ONCE; for records whose work (works[0]) is in the workset AND that
+    carry a non-empty ``ia``, stage (work_key, ocaid, edition_key).  Then
+    upgrade workset ISBNs whose ia_identifier is NULL to the work's ocaid
+    (ia_source='ocaid') — assign-status then derives NT from the identifier.
+    Deterministic single pass, idempotent upserts."""
+    ensure_schema(conn)
+    work_keys = {r["work_key"] for r in
+                 conn.execute("SELECT work_key FROM enrich_workset")
+                 if r["work_key"]}
+    staged: list[tuple] = []
+    n_read = 0
+
+    def flush():
+        if staged:
+            conn.executemany(
+                "INSERT OR REPLACE INTO ocaid_stage (work_key, ocaid, edition_key) "
+                "VALUES (?,?,?)", staged)
+            staged.clear()
+            conn.commit()
+
+    with m4.open_dump(path=dump) as fh:
+        for key, obj in m4.iter_dump_records(fh, progress_every, "ocaid"):
+            if key == "_summary" or not key.startswith("/books/"):
+                continue
+            if max_records is not None and n_read >= max_records:
+                break
+            n_read += 1
+            works = [w.get("key") for w in obj.get("works") or []
+                     if isinstance(w, dict)]
+            work_key = works[0] if works else None
+            if work_key is None or work_key not in work_keys:
+                continue   # works outside the workset ignored
+            ias = [str(x) for x in _m4_list(obj.get("ia")) if str(x).strip()]
+            if not ias:
+                continue
+            staged.append((work_key, ias[0], key))
+            if len(staged) >= BATCH:
+                flush()
+    flush()
+
+    conn.execute(
+        """UPDATE enrich_status SET
+             ia_identifier = (SELECT o.ocaid FROM ocaid_stage o
+                              JOIN enrich_workset w ON w.work_key = o.work_key
+                              WHERE w.isbn13 = enrich_status.isbn13
+                              ORDER BY o.edition_key ASC LIMIT 1),
+             ia_source = 'ocaid'
+           WHERE ia_identifier IS NULL
+             AND EXISTS (SELECT 1 FROM enrich_workset w
+                         JOIN ocaid_stage o ON o.work_key = w.work_key
+                         WHERE w.isbn13 = enrich_status.isbn13)""")
+    conn.commit()
+    works_with = conn.execute(
+        "SELECT COUNT(DISTINCT work_key) c FROM ocaid_stage").fetchone()["c"]
+    upgraded = conn.execute(
+        "SELECT COUNT(*) c FROM enrich_status "
+        "WHERE ia_source='ocaid' AND ia_identifier IS NOT NULL").fetchone()["c"]
+    return {"records_read": n_read, "works_with_ocaid": works_with,
+            "upgraded": upgraded}
+
+
+# ------------------------------------------------- stage 3c (M5.5): GB trickle
+GB_VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes"
+GB_KEY_DEFAULT_FILES = (Path("/root/projects/lastcopy/secrets/gbooks.key"),)
+
+
+def resolve_gb_key(key_file: str | Path | None = None) -> str:
+    """--key-file > LASTCOPY_GBOOKS_KEY env > server secrets path >
+    ~/.config/lastcopy/gbooks.key; KeyRequiredError when nothing resolves."""
+    import os
+
+    from .sources.gbooks import KEY_ENV, KEY_FILE, KeyRequiredError
+    if key_file is not None:
+        p = Path(key_file)
+        if p.is_file():
+            txt = p.read_text(encoding="utf-8").strip()
+            if txt:
+                return txt
+        raise KeyRequiredError(f"no Google Books key at --key-file {p}")
+    env = os.environ.get(KEY_ENV, "").strip()
+    if env:
+        return env
+    for p in (*GB_KEY_DEFAULT_FILES, KEY_FILE):
+        if p.is_file():
+            txt = p.read_text(encoding="utf-8").strip()
+            if txt:
+                return txt
+    raise KeyRequiredError(
+        f"no Google Books key (tried {KEY_ENV}, "
+        + ", ".join(str(p) for p in (*GB_KEY_DEFAULT_FILES, KEY_FILE)) + ")")
+
+
+def _gb_classify(data: dict | None) -> tuple[str, str | None]:
+    """Volumes response -> (gb_status, gb_identifier): 'none' (0 results),
+    'metadata' (results, no full view), 'full' (any viewability FULL)."""
+    items = (data or {}).get("items") or []
+    if not items:
+        return "none", None
+    full = False
+    ident = None
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if ident is None and it.get("id"):
+            ident = str(it["id"])
+        vi = it.get("volumeInfo") or {}
+        ai = it.get("accessInfo") or {}
+        for v in (ai.get("viewability"), ai.get("accessViewStatus"),
+                  vi.get("viewability"), vi.get("accessViewStatus")):
+            if v and "FULL" in str(v):
+                full = True
+    return ("full" if full else "metadata"), ident
+
+
+def gb_trickle(conn: sqlite3.Connection, budget: int, *,
+               key_file: str | Path | None = None,
+               get=_http_get, sleep=time.sleep,
+               min_interval: float = IA_MIN_INTERVAL,
+               max_retries: int = IA_MAX_RETRIES) -> dict:
+    """Budgeted Google Books verification (SPEC-M5.5 Change 2): CR-first
+    selection, ~1 req/s, 429/503 exponential backoff.  Skips rows with
+    gb_status already set (resumable); stops immediately at budget."""
+    from collections import Counter
+
+    key = resolve_gb_key(key_file)   # KeyRequiredError when absent
+    ensure_schema(conn)
+    rows = conn.execute(
+        """SELECT s.isbn13 FROM enrich_status s
+           JOIN enrich_workset w ON w.isbn13 = s.isbn13
+           WHERE s.gb_status IS NULL
+           ORDER BY CASE s.status WHEN 'CR' THEN 0 WHEN 'EN' THEN 1
+                      WHEN 'VU' THEN 2 WHEN 'NT' THEN 3 ELSE 4 END,
+                    w.score DESC, w.isbn13 ASC
+           LIMIT ?""", (budget,)).fetchall()
+    counts: Counter = Counter()
+    for r in rows:
+        data = _request_json(
+            get, {"q": f"isbn:{r['isbn13']}", "key": key},
+            sleep, max_retries, min_interval, url=GB_VOLUMES_URL)
+        if data is None:
+            continue   # request failed -> stays NULL, retried next run
+        gb_status, gb_id = _gb_classify(data)
+        conn.execute(
+            "UPDATE enrich_status SET gb_status=?, gb_identifier=? WHERE isbn13=?",
+            (gb_status, gb_id, r["isbn13"]))
+        conn.commit()
+        counts[gb_status] += 1
+        if sum(counts.values()) >= budget:
+            break
+    return {"queried": sum(counts.values()), "counts": dict(counts)}
 
 
 # ------------------------------------------------------------------ stage 4
@@ -519,25 +694,29 @@ def _rule(r) -> tuple[str, str]:
 
 # ------------------------------------------------------------------ export
 WORKSET_HEADER = ["isbn13", "title", "author", "year", "language",
-                  "edition_count", "score", "status", "status_basis"]
+                  "edition_count", "score", "status", "status_basis",
+                  "gb_status"]
 
 
 def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                    md_path: str | Path | None = None) -> dict:
     """Export the workset WITH status columns, ordered by status severity
-    (CR, EN, VU, NT, DD) then score DESC, isbn13 ASC.  Appends the
-    provisional note to exported lists."""
+    (CR, EN, VU, NT, DD) then score DESC, isbn13 ASC.  The provisional note
+    is dynamic (SPEC-M5.5 Change 3): kept only while any exported row still
+    has gb_status NULL.  gb_status is the final column."""
     ensure_schema(conn)
     order = "CASE s.status WHEN 'CR' THEN 0 WHEN 'EN' THEN 1 WHEN 'VU' THEN 2 " \
             "WHEN 'NT' THEN 3 WHEN 'DD' THEN 4 ELSE 5 END"
     sql = f"""SELECT s.isbn13, c.title, c.year, c.language, w.edition_count,
-                     w.score, s.status, s.status_basis, wr.author_keys
+                      w.score, s.status, s.status_basis, s.gb_status,
+                      wr.author_keys
               FROM enrich_workset w
               JOIN enrich_status s ON s.isbn13 = w.isbn13
               LEFT JOIN candidates c ON c.isbn13 = w.isbn13
               LEFT JOIN works_ref wr ON wr.work_key = w.work_key
               ORDER BY {order}, w.score DESC, w.isbn13 ASC"""
     rows = conn.execute(sql).fetchall()
+    gb_pending = any(r["gb_status"] is None for r in rows)
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         wtr = csv.writer(f)
         wtr.writerow(WORKSET_HEADER)
@@ -545,22 +724,33 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
             wtr.writerow([r["isbn13"], r["title"],
                           m4.resolve_authors(conn, r["author_keys"]),
                           r["year"], r["language"], r["edition_count"],
-                          r["score"], r["status"], r["status_basis"]])
-        wtr.writerow([f"# {PROVISIONAL_NOTE}"])
+                          r["score"], r["status"], r["status_basis"],
+                          r["gb_status"]])
+        if gb_pending:
+            wtr.writerow([f"# {PROVISIONAL_NOTE}"])
     if md_path:
-        lines = ["# lastcopy Book Red List — workset (provisional)", "",
+        title = "lastcopy Book Red List — workset" + \
+            (" (provisional)" if gb_pending else "")
+        lines = [f"# {title}", "",
                  f"Top {len(rows)} enriched workset rows. "
-                 f"{PROVISIONAL_NOTE.capitalize()}.", "",
+                 + (f"{PROVISIONAL_NOTE.capitalize()}."
+                    if gb_pending else "Google Books verification complete."),
+                 "",
                  "| # | isbn13 | title | author | year | lang | eds | score "
-                 "| status | status_basis |",
-                 "|---|---|---|---|---|---|---|---|---|---|"]
+                 "| status | status_basis | gb_status |",
+                 "|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, r in enumerate(rows, 1):
-            title = str(r["title"] or "").replace("|", "\\|")
+            title_ = str(r["title"] or "").replace("|", "\\|")
             author = m4.resolve_authors(conn, r["author_keys"]).replace("|", "\\|")
-            lines.append(f"| {i} | {r['isbn13']} | {title} | {author} "
+            lines.append(f"| {i} | {r['isbn13']} | {title_} | {author} "
                          f"| {r['year']} | {r['language'] or ''} "
                          f"| {r['edition_count']} | {r['score']} "
-                         f"| {r['status']} | {r['status_basis']} |")
-        lines += ["", f"_{PROVISIONAL_NOTE}._", ""]
+                         f"| {r['status']} | {r['status_basis']} "
+                         f"| {r['gb_status'] or ''} |")
+        if gb_pending:
+            lines += ["", f"_{PROVISIONAL_NOTE}._", ""]
+        else:
+            lines += [""]
         Path(md_path).write_text("\n".join(lines), encoding="utf-8")
-    return {"exported": len(rows), "csv": str(csv_path), "md": str(md_path or "")}
+    return {"exported": len(rows), "csv": str(csv_path),
+            "md": str(md_path or ""), "gb_pending": gb_pending}
