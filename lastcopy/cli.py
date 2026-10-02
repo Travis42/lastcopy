@@ -600,6 +600,69 @@ def cmd_gb_trickle(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------- M5.7: holdings
+def cmd_fetch_holdings_bulk(args) -> int:
+    from . import m5
+
+    try:
+        stats = m5.fetch_holdings_bulk(args.institution,
+                                       data_dir=args.data_dir,
+                                       parts=args.parts, weeks=args.weeks)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"fetch-holdings-bulk: {args.institution} -> "
+          f"{stats['downloaded']} downloaded, {stats['resumed']} resumed, "
+          f"{stats['skipped_ok']} skipped (already ok), "
+          f"{stats['failed']} failed (gzip-checked, resumable via curl -C -)")
+    return 0 if stats["failed"] == 0 else 1
+
+
+def cmd_parse_holdings_bulk(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.parse_holdings_bulk(conn, args.institution, args.file)
+    finally:
+        conn.close()
+    print(f"parse-holdings-bulk: {args.institution} "
+          f"{stats['records_read']:,} records read, "
+          f"{stats['isbn_matches']:,} workset ISBN matches -> "
+          f"{stats['holdings_rows']:,} holdings row(s) (idempotent)")
+    return 0
+
+
+def cmd_enrich_holdings(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.enrich_holdings(conn, args.institution, args.budget)
+    finally:
+        conn.close()
+    print(f"enrich-holdings: {args.institution} queried {stats['queried']} "
+          f"(budget {stats['budget']}) -> held={stats['held']}, "
+          f"missed={stats['missed']}, failed={stats['failed']}; "
+          "resumable (rows with holdings are skipped)")
+    return 0
+
+
+def cmd_assign_holdings_summary(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.assign_holdings_summary(conn)
+    finally:
+        conn.close()
+    print(f"assign-holdings-summary: {stats['rows']:,} row(s), "
+          f"{stats['with_holdings']:,} with holdings -> "
+          + ", ".join(f"{k}={v:,}"
+                      for k, v in sorted(stats["by_institution"].items())))
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def _to_year(v):
     try:
@@ -762,6 +825,54 @@ def build_parser() -> argparse.ArgumentParser:
                          "/root/projects/lastcopy/secrets/gbooks.key, "
                          "then ~/.config/lastcopy/gbooks.key)")
     sp.set_defaults(fn=cmd_gb_trickle)
+
+    sp = sub.add_parser(
+        "fetch-holdings-bulk",
+        help="stage A (M5.7): download bulk national-library MARC21-xml "
+             "sets (dnb full copy / loc BooksAll.2016 / ndl weekly ZIPs) "
+             "under data/holdings/<inst>/ — resumable curl -C -, "
+             "gzip-integrity-checked, download only (no parsing)")
+    sp.add_argument("--institution", required=True,
+                    choices=["dnb", "loc", "ndl"],
+                    help="bulk source (bnf is SRU-first, bl blocked)")
+    sp.add_argument("--data-dir", default="data/holdings",
+                    help="root dir for bulk files")
+    sp.add_argument("--parts", nargs="+", type=int, default=None,
+                    metavar="N",
+                    help="part numbers (dnb 1-5, loc 1-43; default all)")
+    sp.add_argument("--weeks", nargs="+", default=None, metavar="YYYYWW",
+                    help="NDL ISO week numbers, e.g. 202637 (required for ndl)")
+    sp.set_defaults(fn=cmd_fetch_holdings_bulk)
+
+    sp = sub.add_parser(
+        "parse-holdings-bulk",
+        help="stage A (M5.7): stream MARC21-xml (.xml/.xml.gz/.zip), "
+             "extract 020 $a ISBNs, upsert workset-matched holdings rows "
+             "(RAM-bounded, idempotent)")
+    sp.add_argument("--institution", required=True,
+                    choices=["dnb", "loc", "ndl", "bnf"],
+                    help="institution code tagged on the holdings rows")
+    sp.add_argument("--file", required=True, nargs="+",
+                    help="bulk file path(s) from fetch-holdings-bulk")
+    sp.set_defaults(fn=cmd_parse_holdings_bulk)
+
+    sp = sub.add_parser(
+        "enrich-holdings",
+        help="stage B (M5.7): SRU top-up per institution (dnb/ndl/bnf/loc), "
+             "workset ISBNs with no holdings row yet; <=2 rps, IPv4-forced, "
+             "budget-capped, resumable; loc uses plain http://lx2:210 (TLS "
+             "broken on that port)")
+    sp.add_argument("--institution", required=True,
+                    choices=["dnb", "ndl", "bnf", "loc"])
+    sp.add_argument("--budget", type=int, default=1000,
+                    help="max SRU requests this run")
+    sp.set_defaults(fn=cmd_enrich_holdings)
+
+    sp = sub.add_parser(
+        "assign-holdings-summary",
+        help="M5.7: derive enrich_status.holdings (comma-joined institution "
+             "codes) from the holdings table (status/custody untouched)")
+    sp.set_defaults(fn=cmd_assign_holdings_summary)
     return p
 
 

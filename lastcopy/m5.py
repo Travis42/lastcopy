@@ -54,7 +54,14 @@ CREATE TABLE IF NOT EXISTS enrich_status (
   checked_at TEXT,
   status TEXT,
   status_basis TEXT,
-  custody TEXT
+  custody TEXT,
+  holdings TEXT
+);
+CREATE TABLE IF NOT EXISTS holdings (
+  isbn13 TEXT NOT NULL,
+  institution TEXT NOT NULL,
+  record_id TEXT,
+  PRIMARY KEY (isbn13, institution)
 );
 CREATE TABLE IF NOT EXISTS ocaid_stage (
   work_key TEXT NOT NULL,
@@ -107,7 +114,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     # M5.5 migration: ia_source / gb_identifier on pre-existing DBs
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(enrich_status)")}
-    for col in ("ia_source", "gb_identifier", "custody"):
+    for col in ("ia_source", "gb_identifier", "custody", "holdings"):
         if col not in cols:
             conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
     # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
@@ -742,9 +749,326 @@ def assign_custody(conn: sqlite3.Connection) -> dict:
     return {"custody_assigned": len(updates), "custody": dict(counts)}
 
 
+# --------------------------------------------- M5.7: national-library holdings
+# Physical-holdings evidence from legal-deposit national libraries
+# (SPEC-M5.7-HOLDINGS).  Status/custody rules are UNTOUCHED this phase:
+# holdings refine acquisition priority only.
+HOLDINGS_INSTITUTIONS = ("bnf", "dnb", "loc", "ndl")
+
+# Verified bulk sources (research/2026-10-02-national-library-holdings.md):
+#   dnb — full MARC21-xml copy, 5 parts ~12.3GB / 37.2M records, anonymous
+#   loc — MDSConnect BooksAll.2016, 43 parts ~3GB / 25M records (2016
+#         snapshot; the SRU top-up covers post-2016), anonymous
+#   ndl — JAPAN/MARC weekly ZIPs (small, anonymous); bnb has no bulk
+#         bnf dumps are RDF — SRU-first, no bulk MARC set
+HOLDINGS_BULK_URLS = {
+    "dnb": [f"https://data.dnb.de/DNB/dnb_all_dnbmarc.{i}.mrc.xml.gz"
+            for i in range(1, 6)],
+    "loc": [f"https://www.loc.gov/cds/downloads/MDSConnect/"
+            f"BooksAll.2016.part{n:02d}.xml.gz" for n in range(1, 44)],
+    "ndl": "https://www.ndl.go.jp/file/data/data_service/jnb_product/"
+           "jmo{week}.zip",
+}
+
+
+def fetch_holdings_bulk(institution: str, *, data_dir: str | Path | None = None,
+                        parts: list[int] | None = None,
+                        weeks: list[str] | None = None,
+                        timeout: int = 0) -> dict:
+    """Stage A: download bulk MARC21-xml sets under
+    ``data/holdings/<inst>/``.  Resumable (curl -C -, IPv4-forced), each
+    file gzip-integrity-checked; already-complete files are skipped.
+    Download+verify only — no parsing (see ``parse_holdings_bulk``)."""
+    import subprocess
+    if institution not in ("dnb", "loc", "ndl"):
+        raise ValueError(f"no bulk MARC set for '{institution}' "
+                         "(bnf is SRU-first; bl blocked)")
+    base = Path(data_dir) if data_dir is not None else Path("data/holdings")
+    dest = base / institution
+    dest.mkdir(parents=True, exist_ok=True)
+    if institution == "ndl":
+        if not weeks:
+            raise ValueError("ndl bulk needs --weeks (ISO week numbers, "
+                             "e.g. 202637)")
+        urls = [HOLDINGS_BULK_URLS["ndl"].format(week=w) for w in weeks]
+    elif institution == "dnb":
+        urls = [HOLDINGS_BULK_URLS["dnb"][p - 1]
+                for p in (parts or range(1, 6))]
+    else:
+        urls = [HOLDINGS_BULK_URLS["loc"][p - 1]
+                for p in (parts or range(1, 44))]
+    stats = {"institution": institution, "downloaded": 0, "resumed": 0,
+             "skipped_ok": 0, "failed": 0, "files": []}
+    for url in urls:
+        target = dest / url.rsplit("/", 1)[-1]
+        stats["files"].append(str(target))
+        if target.exists() and _gzip_ok(target):
+            stats["skipped_ok"] += 1
+            continue
+        existed = target.exists()
+        rc = subprocess.call(
+            ["curl", "-C", "-", "-4", "-L", "--fail", "--retry", "3",
+             "-o", str(target), url], timeout=timeout or None)
+        if rc == 0 and _gzip_ok(target):
+            stats["resumed" if existed else "downloaded"] += 1
+        else:
+            stats["failed"] += 1
+    return stats
+
+
+def _gzip_ok(path: Path) -> bool:
+    """Full-decompression gzip integrity check (truncated tails fail)."""
+    import gzip as _gz
+    try:
+        with _gz.open(path, "rb") as fh:
+            while fh.read(1 << 20):
+                pass
+        return True
+    except (OSError, EOFError):
+        return False
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+def _marc_streams(path: str | Path):
+    """Yield decoded text streams of MARC21-xml payloads: plain .xml,
+    .xml.gz, or members inside NDL JAPAN/MARC .zip archives."""
+    import io
+    import zipfile
+    p = str(path)
+    if p.lower().endswith(".zip"):
+        with zipfile.ZipFile(p) as zf:
+            for name in sorted(zf.namelist()):
+                if not name.lower().endswith((".xml", ".xml.gz")):
+                    continue
+                raw = zf.open(name)
+                if name.lower().endswith(".gz"):
+                    import gzip as _gz
+                    raw = _gz.open(raw, "rb")
+                yield name, io.TextIOWrapper(raw, encoding="utf-8",
+                                             errors="replace")
+    elif p.endswith(".gz"):
+        yield p, gzip.open(p, "rt", encoding="utf-8", errors="replace")
+    else:
+        yield p, open(p, "rt", encoding="utf-8", errors="replace")
+
+
+def _iter_marc_records(stream):
+    """RAM-bounded iterparse: yield each <record> element, clearing as we go
+    (works for <collection> wraps and bare single-record docs, any namespace)."""
+    import xml.etree.ElementTree as ET
+    parser = ET.iterparse(stream, events=("start", "end"))
+    root = None
+    for event, elem in parser:
+        if event == "start":
+            if root is None:
+                root = elem
+        elif _local(elem.tag) == "record":
+            yield elem
+            elem.clear()
+            if root is not None:
+                root.clear()
+
+
+def _marc_isbns(record) -> tuple[str | None, list[str]]:
+    """(record_id from 001, ISBN strings from 020 $a) — qualifier suffixes
+    like ' (hbk.)' stripped before normalization downstream."""
+    rec_id: str | None = None
+    isbns: list[str] = []
+    for el in record.iter():
+        t = _local(el.tag)
+        if t == "controlfield" and el.get("tag") == "001" and el.text:
+            rec_id = rec_id or el.text.strip()
+        elif t == "datafield" and el.get("tag") == "020":
+            for sf in el:
+                if (_local(sf.tag) == "subfield" and sf.get("code") == "a"
+                        and sf.text):
+                    isbns.append(sf.text.split("(")[0].strip())
+    return rec_id, isbns
+
+
+def parse_holdings_bulk(conn: sqlite3.Connection, institution: str,
+                        files: list[str | Path],
+                        progress_every: int = 100_000) -> dict:
+    """Stage A parse pass: stream MARC21-xml, extract 020 $a ISBNs
+    (normalized via isbn.py, ISBN-10 and hyphenated-13 both fold to isbn13),
+    match against the in-memory workset set, upsert holdings rows.
+    RAM-bounded, progress lines, idempotent."""
+    ensure_schema(conn)
+    workset = {r["isbn13"]
+               for r in conn.execute("SELECT isbn13 FROM enrich_workset")}
+    n_read = matched = 0
+    upserts: list[tuple] = []
+
+    def flush():
+        if upserts:
+            conn.executemany(
+                "INSERT OR REPLACE INTO holdings "
+                "(isbn13, institution, record_id) VALUES (?,?,?)", upserts)
+            upserts.clear()
+            conn.commit()
+
+    for path in files:
+        for name, stream in _marc_streams(path):
+            for record in _iter_marc_records(stream):
+                n_read += 1
+                if progress_every and n_read % progress_every == 0:
+                    print(f"[holdings:{institution}] {n_read:,} records "
+                          f"({matched:,} matched)", file=sys.stderr,
+                          flush=True)
+                rec_id, raws = _marc_isbns(record)
+                for raw in raws:
+                    norm = normalize_isbn(raw)
+                    if norm and norm[0] in workset:
+                        upserts.append((norm[0], institution, rec_id))
+                        matched += 1
+                if len(upserts) >= BATCH:
+                    flush()
+            stream.close()
+    flush()
+    rows = conn.execute(
+        "SELECT COUNT(*) c FROM holdings WHERE institution=?",
+        (institution,)).fetchone()["c"]
+    return {"institution": institution, "records_read": n_read,
+            "isbn_matches": matched, "holdings_rows": rows}
+
+
+# SRU top-ups (Stage B).  All verified keyless 2026-10-02; query forms from
+# the research notes (dnb isbn=, bnf 'bib.isbn all "..."', loc bath.isbn=,
+# ndl isbn=).  loc lx2 serves plain HTTP on port 210 ONLY — TLS handshake
+# fails there (unexpected-EOF), so http:// is deliberate, not an oversight.
+SRU_ENDPOINTS = {
+    "dnb": {"url": "https://services.dnb.de/sru/dnb", "version": "1.1",
+            "query": "isbn={isbn}", "schema": "MARC21-xml"},
+    "ndl": {"url": "https://ndlsearch.ndl.go.jp/api/sru", "version": None,
+            "query": "isbn={isbn}", "schema": "dcndl_v3"},
+    "bnf": {"url": "https://catalogue.bnf.fr/api/SRU", "version": "1.2",
+            "query": 'bib.isbn all "{isbn}"', "schema": "unimarcxchange"},
+    "loc": {"url": "http://lx2.loc.gov:210/lcdb", "version": "1.1",
+            "query": "bath.isbn={isbn}", "schema": "mods"},
+}
+HOLDINGS_MIN_INTERVAL = 0.5     # <=2 rps sustained per host
+HOLDINGS_MAX_RETRIES = 3        # exponential backoff on 429/503
+
+
+def _sru_request(get, url: str, params: dict, sleep, max_retries: int,
+                 min_interval: float):
+    """SRU GET with the same discipline as _request_json: min-interval
+    pacing, exponential backoff on 429/503; returns response text or None."""
+    attempt = 0
+    while True:
+        sleep(min_interval)
+        resp = get(url, params)
+        if resp.status_code in (429, 503) and attempt < max_retries - 1:
+            sleep(2.0 ** attempt)
+            attempt += 1
+            continue
+        if getattr(resp, "ok", 200 <= resp.status_code < 300):
+            return resp.text
+        return None
+
+
+def _parse_sru(text: str) -> tuple[int, str | None]:
+    """(numberOfRecords, recordId) from an SRU searchRetrieveResponse.
+    Namespace-agnostic: SRU 1.1/1.2 wrappers differ; record ids live in
+    MARC 001, dcndl identifiers, or MODS recordIdentifier."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return 0, None
+    n = 0
+    rec_id: str | None = None
+    for el in root.iter():
+        t = _local(el.tag)
+        if t == "numberOfRecords" and el.text and el.text.strip().isdigit():
+            n = int(el.text.strip())
+        elif rec_id is None and el.text and el.text.strip() and (
+                (t == "controlfield" and el.get("tag") == "001")
+                or t == "recordIdentifier"):
+            rec_id = el.text.strip()
+    return n, rec_id
+
+
+def enrich_holdings(conn: sqlite3.Connection, institution: str,
+                    budget: int, *, get=None, sleep=time.sleep,
+                    min_interval: float = HOLDINGS_MIN_INTERVAL,
+                    max_retries: int = HOLDINGS_MAX_RETRIES) -> dict:
+    """Stage B: SRU top-up per institution — ONLY workset ISBNs without a
+    holdings row for that institution (post-bulk residual, or institutions
+    without bulk).  IPv4-forced transport (DNB lacks IPv6), budget-capped,
+    resumable (held rows are skipped on rerun).  National-scope zero hits
+    are legitimate misses, not errors."""
+    if institution not in SRU_ENDPOINTS:
+        raise ValueError(f"unknown institution '{institution}' "
+                         f"(want one of {','.join(sorted(SRU_ENDPOINTS))})")
+    ensure_schema(conn)
+    if get is None:
+        get = _http_get        # resolved at call time (tests/CLI patch point)
+    ep = SRU_ENDPOINTS[institution]
+    rows = conn.execute(
+        """SELECT w.isbn13 FROM enrich_workset w
+           WHERE NOT EXISTS (SELECT 1 FROM holdings h
+                             WHERE h.isbn13 = w.isbn13
+                               AND h.institution = ?)
+           ORDER BY w.isbn13 ASC LIMIT ?""",
+        (institution, budget)).fetchall()
+    held = missed = failed = 0
+    for r in rows:
+        params: dict = {"operation": "searchRetrieve",
+                        "query": ep["query"].format(isbn=r["isbn13"]),
+                        "maximumRecords": 1, "recordSchema": ep["schema"]}
+        if ep["version"]:
+            params["version"] = ep["version"]
+        text = _sru_request(get, ep["url"], params, sleep, max_retries,
+                            min_interval)
+        if text is None:
+            failed += 1          # stays rowless -> retried next run
+            continue
+        n, rec_id = _parse_sru(text)
+        if n > 0:
+            conn.execute("INSERT OR IGNORE INTO holdings "
+                         "(isbn13, institution, record_id) VALUES (?,?,?)",
+                         (r["isbn13"], institution, rec_id))
+            conn.commit()
+            held += 1
+        else:
+            missed += 1
+    return {"institution": institution, "budget": budget,
+            "queried": held + missed + failed, "held": held,
+            "missed": missed, "failed": failed}
+
+
+def assign_holdings_summary(conn: sqlite3.Connection) -> dict:
+    """Fill ``enrich_status.holdings`` with comma-joined institution codes
+    (derived, alphabetical); '' when none.  No effect on status/custody."""
+    from collections import Counter
+    ensure_schema(conn)
+    conn.execute(
+        """UPDATE enrich_status SET holdings = (
+             SELECT COALESCE(GROUP_CONCAT(h.institution), '')
+             FROM (SELECT institution FROM holdings h
+                   WHERE h.isbn13 = enrich_status.isbn13
+                   ORDER BY h.institution ASC) h)""")
+    conn.commit()
+    counts: Counter = Counter()
+    n_rows = n_any = 0
+    for r in conn.execute("SELECT isbn13, holdings FROM enrich_status"):
+        n_rows += 1
+        for c in (r["holdings"] or "").split(","):
+            if c:
+                counts[c] += 1
+        if r["holdings"]:
+            n_any += 1
+    return {"rows": n_rows, "with_holdings": n_any,
+            "by_institution": dict(counts)}
+
+
 # ------------------------------------------------------------------ export
 WORKSET_HEADER = ["isbn13", "title", "author", "year", "language",
-                  "edition_count", "score", "status", "custody",
+                  "edition_count", "score", "status", "custody", "holdings",
                   "status_basis", "gb_status"]
 
 
@@ -758,8 +1082,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
     order = "CASE s.status WHEN 'CR' THEN 0 WHEN 'EN' THEN 1 WHEN 'VU' THEN 2 " \
             "WHEN 'NT' THEN 3 WHEN 'DD' THEN 4 ELSE 5 END"
     sql = f"""SELECT s.isbn13, c.title, c.year, c.language, w.edition_count,
-                      w.score, s.status, s.custody, s.status_basis,
-                      s.gb_status, wr.author_keys
+                      w.score, s.status, s.custody, s.holdings,
+                      s.status_basis, s.gb_status, wr.author_keys
               FROM enrich_workset w
               JOIN enrich_status s ON s.isbn13 = w.isbn13
               LEFT JOIN candidates c ON c.isbn13 = w.isbn13
@@ -774,8 +1098,9 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
             wtr.writerow([r["isbn13"], r["title"],
                           m4.resolve_authors(conn, r["author_keys"]),
                           r["year"], r["language"], r["edition_count"],
-                          r["score"], r["status"], r["custody"],
-                          r["status_basis"], r["gb_status"]])
+                           r["score"], r["status"], r["custody"],
+                           r["holdings"] or "",
+                           r["status_basis"], r["gb_status"]])
         if gb_pending:
             wtr.writerow([f"# {PROVISIONAL_NOTE}"])
     if md_path:
@@ -786,9 +1111,9 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                  + (f"{PROVISIONAL_NOTE.capitalize()}."
                     if gb_pending else "Google Books verification complete."),
                  "",
-                 "| # | isbn13 | title | author | year | lang | eds | score "
-                 "| status | custody | status_basis | gb_status |",
-                 "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| # | isbn13 | title | author | year | lang | eds | score "
+                  "| status | custody | holdings | status_basis | gb_status |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, r in enumerate(rows, 1):
             title_ = str(r["title"] or "").replace("|", "\\|")
             author = m4.resolve_authors(conn, r["author_keys"]).replace("|", "\\|")
@@ -796,6 +1121,7 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                          f"| {r['year']} | {r['language'] or ''} "
                          f"| {r['edition_count']} | {r['score']} "
                          f"| {r['status']} | {r['custody'] or ''} "
+                         f"| {r['holdings'] or ''} "
                          f"| {r['status_basis']} "
                          f"| {r['gb_status'] or ''} |")
         if gb_pending:

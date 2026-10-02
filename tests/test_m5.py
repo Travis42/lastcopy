@@ -441,7 +441,8 @@ def test_export_workset_header_order_note(m5_db, tmp_path, capsys):
     assert rc == 0
     lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ("isbn13,title,author,year,language,edition_count,"
-                        "score,status,custody,status_basis,gb_status")
+                        "score,status,custody,holdings,status_basis,"
+                        "gb_status")
     assert lines[-1] == f"# {m5.PROVISIONAL_NOTE}"
     body = [ln.split(",")[0] for ln in lines[1:-1]]
     st = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
