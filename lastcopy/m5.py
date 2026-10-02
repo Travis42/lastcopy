@@ -381,9 +381,13 @@ def build_ia_plan(conn: sqlite3.Connection, batch: int = IA_BATCH) -> dict:
 
 def _http_get(url: str, params: dict):
     """Default (real) transport: httpx sync client.  Executor accepts any
-    requests-style injectable ``get`` for tests."""
+    requests-style injectable ``get`` for tests.  IPv4-forced: the GB API key
+    is IPv4-allowlisted and httpx happy-eyeballs picks IPv6 -> 403
+    (2026-10-02: a 1,000-request trickle silently queried 0)."""
     import httpx
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    transport = httpx.HTTPTransport(local_address="0.0.0.0")
+    with httpx.Client(timeout=30, follow_redirects=True,
+                      transport=transport) as client:
         return client.get(url, params=params)
 
 

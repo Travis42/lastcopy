@@ -68,7 +68,8 @@ def edge_editions_lines() -> list[str]:
         dump_line("/type/edition", "/books/OL2M", {
             "title": "Popular Scanned", "publish_date": "1975",
             "languages": [{"key": "/languages/eng"}], "isbn_13": [isbn13_for(2)],
-            "ia": ["popularscanned00ol"], "works": [{"key": "/works/OLW2"}]}),
+            # real 2026 dump shape: IA id under `ocaid` (was wrongly "ia")
+            "ocaid": ["popularscanned00ol"], "works": [{"key": "/works/OLW2"}]}),
         # multi-isbn: two valid isbn13 -> two rows, same edition data
         dump_line("/type/edition", "/books/OL3M", {
             "title": "Dual ISBN Edition", "publish_date": "1950",
@@ -562,3 +563,17 @@ def test_cli_m4_subcommands_render_and_run(tmp_path, capsys):
         cli_main(["--db", db, "ingest-editions"])
     with pytest.raises(SystemExit):
         cli_main(["--db", db, "ingest-editions", "--file", "x", "--stream-url", "u"])
+
+
+def test_extract_edition_reads_ocaid_not_ia():
+    """Regression (2026-10-02): the editions dump has NO `ia` field — the IA
+    id lives in `ocaid` (primary) / `ia_loaded_id` (fallback). The ia-empty
+    candidate filter silently passed everything before this fix."""
+    from lastcopy.m4 import extract_edition
+    base = {"isbn_13": ["9780000000101"], "works": [{"key": "/works/W"}]}
+    r_ocaid = extract_edition("/books/OL1M", dict(base, ocaid=["scanA"]))[0]
+    assert r_ocaid["ia"] == "scanA"
+    r_fallback = extract_edition("/books/OL2M", dict(base, ia_loaded_id=["scanB"]))[0]
+    assert r_fallback["ia"] == "scanB"
+    r_none = extract_edition("/books/OL3M", dict(base, ia=["legacy-ignored"]))[0]
+    assert r_none["ia"] is None

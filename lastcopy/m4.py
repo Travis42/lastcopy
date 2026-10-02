@@ -213,7 +213,11 @@ def extract_edition(key: str, obj: dict) -> list[dict]:
     year = parse_year(obj.get("publish_date"))
     langs = [_lang_code(l) for l in _as_list(obj.get("languages"))]
     works = [w.get("key") for w in obj.get("works") or [] if isinstance(w, dict)]
-    ia = ",".join(str(x) for x in _as_list(obj.get("ia")))
+    # 2026 dump shape: IA identifier lives in `ocaid` (primary) or
+    # `ia_loaded_id` — there is NO `ia` field on edition records
+    # (2026-10-02 finding; the old ia-empty candidate filter was a no-op).
+    ia_raw = _as_list(obj.get("ocaid")) or _as_list(obj.get("ia_loaded_id"))
+    ia = ",".join(str(x) for x in ia_raw)
     base = dict(edition_key=key, work_key=works[0] if works else None,
                 year=year, language=langs[0] if langs else None, ia=ia or None)
     return [dict(base, isbn13=i13) for i13 in ordered]

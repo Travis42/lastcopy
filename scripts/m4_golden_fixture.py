@@ -87,7 +87,8 @@ def main():
                 else:
                     ed["languages"] = [{"key": f"/languages/{lang}"}]
             if rng.random() < 0.12:  # IA scan present -> excluded from candidates
-                ed["ia"] = [f"worksNum{w:07d}{e}"]
+                # REAL 2026 dump shape: IA id under `ocaid` (no `ia` field)
+                ed["ocaid"] = [f"worksNum{w:07d}{e}"]
             if rng.random() < 0.15:
                 ed["oclc_numbers"] = [str(rng.randrange(10 ** 8))]
             roll = rng.random()
