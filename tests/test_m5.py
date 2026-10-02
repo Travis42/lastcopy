@@ -875,3 +875,128 @@ def test_cli_assign_custody_subcommand(m5_db, capsys):
     assert conn.execute("SELECT COUNT(*) c FROM enrich_status "
                         "WHERE custody='unknown'"
                         ).fetchone()["c"] == 12
+
+
+# --------------------------------------------------- M5.8: parallel IA slices
+def _tmp_of(m5_db):
+    return m5_db[1]
+
+
+def test_ia_execute_results_dir_writes_slice_done_no_db_writes(m5_db):
+    """--results-dir mode: hits land in slice_<idx>.jsonl + done_<idx>
+    marker; enrich_status / ia_plan / sources_checked all untouched."""
+    conn = _post_ht_wd(m5_db)
+    m5.build_ia_plan(conn, batch=3)
+    probe_q = conn.execute(
+        "SELECT query FROM ia_plan WHERE element_idx=0").fetchone()["query"]
+    i2, i3, i7 = isbn13_for(2), isbn13_for(3), isbn13_for(7)
+    by_q = {
+        probe_q: FakeResponse(200, {"response": {"numFound": 2, "docs": []}}),
+        f"(isbn:{i2}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-2"}]}}),
+        f"(isbn:{i3}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 0, "docs": []}}),
+        f"(isbn:{i7}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-7"}]}}),
+    }
+    http = FakeHTTP(by_q)
+    rdir = _tmp_of(m5_db) / "results"
+    out = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep,
+                                results_dir=rdir)
+    assert out == {"element": 0, "skipped_done": False, "hits": 2}
+    slice_path = rdir / "slice_0.jsonl"
+    lines = [json.loads(l) for l in
+             slice_path.read_text(encoding="utf-8").splitlines()]
+    assert lines == [{"isbn13": i2, "ia_identifier": "scan-of-2"},
+                     {"isbn13": i7, "ia_identifier": "scan-of-7"}]
+    assert (rdir / "done_0").exists()
+    # NO DB writes: ia stays NULL, element not done, 'ia' never checked
+    ia = dict(conn.execute("SELECT isbn13, ia_identifier FROM enrich_status"
+                           ).fetchall())
+    assert all(v is None for v in ia.values())
+    assert conn.execute("SELECT done FROM ia_plan WHERE element_idx=0"
+                        ).fetchone()["done"] == 0
+    assert conn.execute("SELECT COUNT(*) c FROM enrich_status "
+                        "WHERE sources_checked LIKE '%ia%'"
+                        ).fetchone()["c"] == 0
+    # rerun skips via the done marker: no HTTP, no file rewrite
+    mtime = slice_path.stat().st_mtime_ns
+    out2 = m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep,
+                                 results_dir=rdir)
+    assert out2["skipped_done"] is True and out2["hits"] == 0
+    assert len(http.calls) == 4
+    assert slice_path.stat().st_mtime_ns == mtime
+
+
+def test_ia_execute_results_dir_works_on_read_only_db(m5_db):
+    """Parallel executors open the DB mode=ro (connect_ro) — the executor
+    must never need a write connection in results-dir mode."""
+    conn = _post_ht_wd(m5_db)
+    m5.build_ia_plan(conn, batch=3)
+    probe_q = conn.execute(
+        "SELECT query FROM ia_plan WHERE element_idx=0").fetchone()["query"]
+    http = FakeHTTP({probe_q: FakeResponse(
+        200, {"response": {"numFound": 0, "docs": []}})})
+    ro = m5.connect_ro(_tmp_of(m5_db) / "m5.db")
+    try:
+        out = m5.execute_ia_element(ro, 0, get=http.get, sleep=http.sleep,
+                                    results_dir=_tmp_of(m5_db) / "results-ro")
+        assert out["hits"] == 0
+        assert (_tmp_of(m5_db) / "results-ro" / "done_0").exists()
+    finally:
+        ro.close()
+
+
+def test_merge_ia_results_applies_once_skips_unknown_and_set(m5_db, capsys):
+    conn = _post_ht_wd(m5_db)
+    m5.build_ia_plan(conn, batch=3)
+    probe_q = conn.execute(
+        "SELECT query FROM ia_plan WHERE element_idx=0").fetchone()["query"]
+    i2, i3, i7 = isbn13_for(2), isbn13_for(3), isbn13_for(7)
+    by_q = {
+        probe_q: FakeResponse(200, {"response": {"numFound": 2, "docs": []}}),
+        f"(isbn:{i2}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-2"}]}}),
+        f"(isbn:{i3}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 0, "docs": []}}),
+        f"(isbn:{i7}) AND mediatype:texts":
+            FakeResponse(200, {"response": {"numFound": 1, "docs": [
+                {"identifier": "scan-of-7"}]}}),
+    }
+    http = FakeHTTP(by_q)
+    rdir = _tmp_of(m5_db) / "results"
+    m5.execute_ia_element(conn, 0, get=http.get, sleep=http.sleep,
+                          results_dir=rdir)
+    # a foreign slice with one unknown ISBN + one malformed line
+    (rdir / "slice_99.jsonl").write_text(
+        json.dumps({"isbn13": "9789999999993", "ia_identifier": "ghost"})
+        + "\nnot-json\n", encoding="utf-8")
+    db = str(_tmp_of(m5_db) / "m5.db")
+    rc = cli_main(["--db", db, "merge-ia-results", "--results-dir", str(rdir)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "merge-ia-results" in out and "applied=2" in out
+    ia = dict(conn.execute("SELECT isbn13, ia_identifier FROM enrich_status"
+                           ).fetchall())
+    assert ia[i2] == "scan-of-2" and ia[i7] == "scan-of-7"
+    # idempotent: second merge applies nothing, hits stay put
+    rc2 = cli_main(["--db", db, "merge-ia-results", "--results-dir", str(rdir)])
+    assert rc2 == 0
+    assert "applied=0" in capsys.readouterr().out
+    ia2 = dict(conn.execute("SELECT isbn13, ia_identifier FROM enrich_status"
+                            ).fetchall())
+    assert ia2 == ia
+    # 'ia' checked recorded (assign-status needs it to avoid DD gaps)
+    assert conn.execute("SELECT COUNT(*) c FROM enrich_status "
+                        "WHERE sources_checked LIKE '%ia%'"
+                        ).fetchone()["c"] == 12
+
+
+def test_cli_results_dir_requires_execute(m5_db, capsys):
+    db = str(_tmp_of(m5_db) / "m5.db")
+    rc = cli_main(["--db", db, "enrich-ia", "--results-dir", "/tmp/nope"])
+    assert rc == 2
+    assert "requires --execute" in capsys.readouterr().err

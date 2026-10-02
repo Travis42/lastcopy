@@ -399,18 +399,37 @@ def _http_get(url: str, params: dict):
         return client.get(url, params=params)
 
 
+def connect_ro(db: str | Path) -> sqlite3.Connection:
+    """Read-only connection (M5.8 parallel executors: ia_plan is read, never
+    written — no shared-DB writes during parallel execution)."""
+    conn = sqlite3.connect(f"file:{Path(db).resolve()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
                        get=_http_get, sleep=time.sleep,
                        min_interval: float = IA_MIN_INTERVAL,
-                       max_retries: int = IA_MAX_RETRIES) -> dict:
+                       max_retries: int = IA_MAX_RETRIES,
+                       results_dir: str | Path | None = None) -> dict:
     """Execute one ia_plan element with rate discipline (<=1 req/s,
     exponential backoff on 429/503, max ``max_retries``).  Deterministic +
     resumable: each result is upserted; reruns skip done elements and skip
-    ISBNs already resolved by an earlier phase."""
+    ISBNs already resolved by an earlier phase.
+
+    M5.8 parallel mode: with ``results_dir`` set, NO DB writes happen —
+    hits go to ``results_dir/slice_<idx>.jsonl`` (one ``{"isbn13": ...,
+    "ia_identifier": ...}`` object per resolved ISBN) and completion is
+    marked by ``results_dir/done_<idx>`` (the skip-if-done signal across
+    reruns).  ``conn`` is only read (ia_plan / prior ht/wd resolution)."""
     row = conn.execute("SELECT * FROM ia_plan WHERE element_idx=?",
                        (element_idx,)).fetchone()
     if row is None:
         raise ValueError(f"no ia_plan element {element_idx}")
+    results = Path(results_dir) if results_dir is not None else None
+    if results is not None:
+        if (results / f"done_{element_idx}").exists():
+            return {"element": element_idx, "skipped_done": True, "hits": 0}
     if row["done"]:
         return {"element": element_idx, "skipped_done": True, "hits": 0}
     isbns: list[str] = json.loads(row["isbns"])
@@ -419,6 +438,21 @@ def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
 
     live = [i13 for i13 in isbns if not _resolved(conn, i13)]
     hits = 0
+    slice_lines: list[str] = []
+    local_resolved: set[str] = set()
+
+    def _record(i13: str, ident: str) -> None:
+        nonlocal hits
+        hits += 1
+        if results is not None:
+            slice_lines.append(
+                json.dumps({"isbn13": i13, "ia_identifier": ident}))
+            local_resolved.add(i13)
+        else:
+            conn.execute(
+                "UPDATE enrich_status SET ia_identifier=?, ia_source='search' "
+                "WHERE isbn13=? AND ia_identifier IS NULL",
+                (ident, i13))
     if live:
         # Two-phase (2026-09-30 IA incident redesign): advancedsearch currently
         # omits isbn/oclc FIELDS from returned docs, so batch-query attribution
@@ -437,7 +471,7 @@ def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
                 pairs = [(i13, f"(oclc:{k}) AND mediatype:texts")
                          for k, i13 in zip(keys, live) if k]
             for i13, single_q in pairs:
-                if _resolved(conn, i13):
+                if i13 in local_resolved or _resolved(conn, i13):
                     continue
                 data = _request_json(
                     get, {"q": single_q, "rows": 1, "output": "json"},
@@ -451,17 +485,62 @@ def execute_ia_element(conn: sqlite3.Connection, element_idx: int, *,
                         continue
                     if IA_CONTAINER_RE.match(str(ident)):
                         continue   # donation pallet/container, not a scan
-                    conn.execute(
-                        "UPDATE enrich_status SET ia_identifier=?, ia_source='search' "
-                        "WHERE isbn13=? AND ia_identifier IS NULL",
-                        (str(ident), i13))
-                    hits += 1
+                    _record(i13, str(ident))
                     break
+    if results is not None:
+        results.mkdir(parents=True, exist_ok=True)
+        (results / f"slice_{element_idx}.jsonl").write_text(
+            "".join(line + "\n" for line in slice_lines), encoding="utf-8")
+        (results / f"done_{element_idx}").write_text(now() + "\n",
+                                                     encoding="utf-8")
+        return {"element": element_idx, "skipped_done": False, "hits": hits}
     conn.execute("UPDATE ia_plan SET done=1, executed_at=? WHERE element_idx=?",
                  (now(), element_idx))
     conn.commit()
     _mark_checked(conn, "ia")
     return {"element": element_idx, "skipped_done": False, "hits": hits}
+
+
+def merge_ia_results(conn: sqlite3.Connection,
+                     results_dir: str | Path) -> dict:
+    """M5.8 single-writer consolidation: stream every ``slice_*.jsonl``
+    produced by parallel executors and apply
+    ``UPDATE enrich_status SET ia_identifier=? WHERE isbn13=? AND
+    ia_identifier IS NULL``.  Idempotent (already-set rows are skipped),
+    unknown ISBNs are counted, never inserted.  Runs AFTER the array job,
+    before assign-status (which needs sources_checked to include 'ia')."""
+    ensure_schema(conn)
+    applied = skipped = unknown = 0
+    files = sorted(Path(results_dir).glob("slice_*.jsonl"))
+    for path in files:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            i13, ident = obj.get("isbn13"), obj.get("ia_identifier")
+            if not i13 or not ident:
+                continue
+            row = conn.execute(
+                "SELECT ia_identifier FROM enrich_status WHERE isbn13=?",
+                (i13,)).fetchone()
+            if row is None:
+                unknown += 1
+            elif row["ia_identifier"] is not None:
+                skipped += 1
+            else:
+                conn.execute(
+                    "UPDATE enrich_status SET ia_identifier=? "
+                    "WHERE isbn13=? AND ia_identifier IS NULL",
+                    (str(ident), i13))
+                applied += 1
+    conn.commit()
+    _mark_checked(conn, "ia")
+    return {"files": len(files), "applied": applied,
+            "skipped_already_set": skipped, "unknown_isbn": unknown}
 
 
 def _resolved(conn: sqlite3.Connection, isbn13: str) -> bool:

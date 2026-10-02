@@ -514,13 +514,20 @@ def cmd_enrich_wikidata(args) -> int:
 def cmd_enrich_ia(args) -> int:
     from . import m4, m5
 
-    conn = m4.connect(args.db)
+    if getattr(args, "results_dir", None) and not args.execute:
+        print("error: --results-dir requires --execute (parallel executor "
+              "mode, M5.8)", file=sys.stderr)
+        return 2
+    # parallel executor mode: read-only DB (ia_plan read, results -> files)
+    conn = (m5.connect_ro(args.db) if getattr(args, "results_dir", None)
+            else m4.connect(args.db))
     try:
         if args.execute:
             total = 0
             for idx in args.execute:
                 try:
-                    stats = m5.execute_ia_element(conn, idx)
+                    stats = m5.execute_ia_element(conn, idx,
+                                                  results_dir=args.results_dir)
                 except ValueError as exc:
                     print(f"error: {exc}", file=sys.stderr)
                     conn.close()
@@ -530,7 +537,10 @@ def cmd_enrich_ia(args) -> int:
                       f"{'skipped (done)' if stats['skipped_done'] else 'executed'}, "
                       f"hits={stats['hits']}")
             print(f"enrich-ia: executed {len(args.execute)} element(s), "
-                  f"{total} hit(s) recorded")
+                  f"{total} hit(s) recorded"
+                  + (f" under {args.results_dir} (no DB writes; "
+                     f"merge via merge-ia-results)" if args.results_dir
+                     else ""))
         else:
             stats = m5.build_ia_plan(conn, batch=args.batch)
             print(f"enrich-ia: plan written: {stats['elements']} element(s) "
@@ -539,6 +549,21 @@ def cmd_enrich_ia(args) -> int:
                   f"arraysize={args.arraysize} for the runner)")
     finally:
         conn.close()
+    return 0
+
+
+def cmd_merge_ia_results(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.merge_ia_results(conn, args.results_dir)
+    finally:
+        conn.close()
+    print(f"merge-ia-results: {stats['files']} slice file(s) -> "
+          f"applied={stats['applied']}, "
+          f"skipped-already-set={stats['skipped_already_set']}, "
+          f"unknown-isbn={stats['unknown_isbn']} (idempotent, single writer)")
     return 0
 
 
@@ -790,7 +815,22 @@ def build_parser() -> argparse.ArgumentParser:
                     metavar="IDX",
                     help="execute mode: run these ia_plan element index(es) "
                          "with rate discipline; reruns skip done rows")
+    sp.add_argument("--results-dir", default=None, metavar="DIR",
+                    help="execute mode (M5.8): write per-element "
+                         "slice_<idx>.jsonl + done_<idx> markers under DIR "
+                         "instead of DB writes (DB opened read-only; "
+                         "consolidate later via merge-ia-results)")
     sp.set_defaults(fn=cmd_enrich_ia)
+
+    sp = sub.add_parser(
+        "merge-ia-results",
+        help="M5.8: single-writer consolidation of parallel-executor "
+             "slice_*.jsonl files into enrich_status "
+             "(applied/skipped/unknown counts; idempotent)")
+    sp.add_argument("--results-dir", required=True, metavar="DIR",
+                    help="dir holding slice_*.jsonl + done_<idx> markers "
+                         "from enrich-ia --execute --results-dir")
+    sp.set_defaults(fn=cmd_merge_ia_results)
 
     sp = sub.add_parser("assign-status",
                         help="stage 4: Book Red List rules CR/EN/VU/NT/DD + "
