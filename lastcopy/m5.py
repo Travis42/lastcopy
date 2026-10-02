@@ -518,7 +518,11 @@ def ocaid_sweep(conn: sqlite3.Connection, dump: str | Path,
             work_key = works[0] if works else None
             if work_key is None or work_key not in work_keys:
                 continue   # works outside the workset ignored
-            ias = [str(x) for x in _m4_list(obj.get("ia")) if str(x).strip()]
+            # 2026 dump format: IA identifier lives in `ocaid` (primary) or
+            # `ia_loaded_id`; there is NO `ia` field on edition records
+            # (2026-10-02 finding — 56.7M-record pass staged 0 with `ia`).
+            ias = [str(x) for x in _m4_list(obj.get("ocaid"))
+                   or _m4_list(obj.get("ia_loaded_id")) if str(x).strip()]
             if not ias:
                 continue
             staged.append((work_key, ias[0], key))

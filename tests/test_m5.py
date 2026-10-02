@@ -598,13 +598,14 @@ def test_dd_requires_unchecked_not_missing_oclc():
 
 
 # --------------------------------------------------- M5.5: ocaid-sweep
-def _ed_ia(key: str, work: str, ia: str) -> str:
-    """An edition record carrying a cross-edition ia (ocaid) link — the
-    audit's false-CR shape: WORK's original edition has the free scan,
-    the workset ISBN (reprint) does not."""
+def _ed_ia(key: str, work: str, ia: str, field: str = "ocaid") -> str:
+    """An edition record carrying a cross-edition IA link — the audit's
+    false-CR shape: WORK's original edition has the free scan, the workset
+    ISBN (reprint) does not. Real 2026 dump shape: `ocaid` (primary) or
+    `ia_loaded_id`; there is NO `ia` field on edition records (2026-10-02)."""
     return dump_line("/type/edition", f"/books/{key}",
                      {"title": f"Ed {key}", "publish_date": "1930",
-                      "ia": [ia], "works": [{"key": work}]})
+                      field: [ia], "works": [{"key": work}]})
 
 
 def test_ocaid_sweep_cross_edition_upgrade(m5_db, tmp_path):
@@ -613,9 +614,10 @@ def test_ocaid_sweep_cross_edition_upgrade(m5_db, tmp_path):
     dump = write_gz(tmp_path / "editions_ocaid.txt.gz", EDITIONS + [
         _ed_ia("EX1", "/works/OW1", "scan123"),        # same work as isbn13_for(1)
         _ed_ia("EXZ", "/works/OWZ", "ignored456"),     # work outside the workset
+        _ed_ia("EX2", "/works/OW1", "scan123b", field="ia_loaded_id"),  # fallback field
     ])
     stats = m5.ocaid_sweep(conn, dump, progress_every=0)
-    assert stats["records_read"] == len(EDITIONS) + 2
+    assert stats["records_read"] == len(EDITIONS) + 3
     assert stats["works_with_ocaid"] == 1              # only OW1 staged
     assert stats["upgraded"] == 1
     row = conn.execute("SELECT ia_identifier, ia_source FROM enrich_status "
