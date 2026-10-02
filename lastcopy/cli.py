@@ -551,7 +551,23 @@ def cmd_assign_status(args) -> int:
     finally:
         conn.close()
     print(f"assign-status: {stats['assigned']:,} row(s) -> "
-          + ", ".join(f"{k}={v}" for k, v in sorted(stats["counts"].items())))
+          + ", ".join(f"{k}={v}" for k, v in sorted(stats["counts"].items()))
+          + (f"; custody -> " if "custody" in stats else "")
+          + (", ".join(f"{k}={v}" for k, v in sorted(stats["custody"].items()))
+             if "custody" in stats else ""))
+    return 0
+
+
+def cmd_assign_custody(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.assign_custody(conn)
+    finally:
+        conn.close()
+    print(f"assign-custody: {stats['custody_assigned']:,} row(s) -> "
+          + ", ".join(f"{k}={v}" for k, v in sorted(stats["custody"].items())))
     return 0
 
 
@@ -715,8 +731,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("assign-status",
                         help="stage 4: Book Red List rules CR/EN/VU/NT/DD + "
-                             "status_basis (pure rules, no network, M5)")
+                             "status_basis + chained custody tag "
+                             "(pure rules, no network, M5)")
     sp.set_defaults(fn=cmd_assign_status)
+
+    sp = sub.add_parser("assign-custody",
+                        help="stage 4b (M5.6): custody-quality tag "
+                             "open/restricted/none/unknown from existing "
+                             "evidence columns (idempotent, no network)")
+    sp.set_defaults(fn=cmd_assign_custody)
 
     sp = sub.add_parser("ocaid-sweep",
                         help="stage 3b (M5.5): stream the editions dump once, "

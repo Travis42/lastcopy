@@ -441,7 +441,7 @@ def test_export_workset_header_order_note(m5_db, tmp_path, capsys):
     assert rc == 0
     lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ("isbn13,title,author,year,language,edition_count,"
-                        "score,status,status_basis,gb_status")
+                        "score,status,custody,status_basis,gb_status")
     assert lines[-1] == f"# {m5.PROVISIONAL_NOTE}"
     body = [ln.split(",")[0] for ln in lines[1:-1]]
     st = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
@@ -787,3 +787,90 @@ def test_cli_ocaid_sweep_and_gb_trickle_render(m5_db, tmp_path, capsys,
     with pytest.raises(KeyRequiredError):
         cli_main(["--db", db, "gb-trickle", "--budget", "10",
                   "--key-file", str(tmp_path / "missing.key")])
+
+
+# --------------------------------------------------- M5.6: custody
+CUSTODY_CASES = [
+    # (name, ht_access, ia_identifier, gb_status, ia_checked, expected)
+    ("open_via_ht", "allow", None, None, True, "open"),
+    ("open_via_ia", None, "some-scan", None, True, "open"),
+    ("open_beats_restricted", "allow", "some-scan", "full", True, "open"),
+    ("restricted_only_gb_full", None, None, "full", True, "restricted"),
+    ("none_via_gb_metadata", None, None, "metadata", True, "none"),
+    ("none_via_gb_none", None, None, "none", True, "none"),
+    ("none_via_nothing", None, None, None, True, "none"),
+    ("unknown_when_ia_unchecked", None, None, "full", False, "unknown"),
+]
+
+
+@pytest.mark.parametrize("name,ht,ia,gb,ia_checked,want",
+                         CUSTODY_CASES, ids=[c[0] for c in CUSTODY_CASES])
+def test_custody_rules_table_driven(tmp_path, name, ht, ia, gb, ia_checked,
+                                    want):
+    conn = m4.connect(tmp_path / "custody.db")
+    m5.ensure_schema(conn)
+    i13 = isbn13_for(1)
+    conn.execute("INSERT INTO enrich_workset (isbn13, work_key, edition_count, "
+                 "score, oclc, created_at) VALUES (?,?,?,?,?,?)",
+                 (i13, "/works/X", 1, 5, None, m5.now()))
+    conn.execute("INSERT INTO enrich_status (isbn13, ht_access, ia_identifier, "
+                 "gb_status, sources_checked) VALUES (?,?,?,?,?)",
+                 (i13, ht, ia, gb, "ht,wd" + (",ia" if ia_checked else "")))
+    stats = m5.assign_custody(conn)
+    row = conn.execute("SELECT custody FROM enrich_status").fetchone()
+    assert row["custody"] == want
+    assert stats["custody_assigned"] == 1
+    assert stats["custody"] == {want: 1}
+    # idempotent: recompute keeps the same tag
+    m5.assign_custody(conn)
+    assert conn.execute("SELECT custody FROM enrich_status"
+                        ).fetchone()["custody"] == want
+    conn.close()
+
+
+def test_assign_status_chains_custody(tmp_path):
+    conn = m4.connect(tmp_path / "chain.db")
+    m5.ensure_schema(conn)
+    conn.execute("INSERT INTO enrich_workset (isbn13, work_key, edition_count, "
+                 "score, oclc, created_at) VALUES (?,?,?,?,?,?)",
+                 (isbn13_for(1), "/works/X", 1, 5, None, m5.now()))
+    conn.execute("INSERT INTO enrich_status (isbn13, ht_access, "
+                 "sources_checked) VALUES (?, 'allow', 'ht,ia')",
+                 (isbn13_for(1),))
+    stats = m5.assign_status(conn)
+    assert "custody" in stats and stats["custody"] == {"open": 1}
+    assert conn.execute("SELECT custody FROM enrich_status"
+                        ).fetchone()["custody"] == "open"
+    conn.close()
+
+
+def test_export_workset_custody_column(m5_db, tmp_path):
+    conn = _post_ht_wd(m5_db)
+    m5.assign_custody(conn)
+    csv_path, md_path = tmp_path / "ws.csv", tmp_path / "ws.md"
+    rc = cli_main(["--db", str(tmp_path / "m5.db"), "export-list", "--workset",
+                   "--csv", str(csv_path), "--md", str(md_path)])
+    assert rc == 0
+    lines = csv_path.read_text(encoding="utf-8").splitlines()
+    hdr = lines[0].split(",")
+    assert hdr.index("custody") == hdr.index("status") + 1   # after status
+    data = [ln.split(",") for ln in lines[1:-1]]   # last line = note
+    cust = {r[0]: r[hdr.index("custody")] for r in data}
+    assert cust[isbn13_for(1)] == "open"          # ht allow
+    assert cust[isbn13_for(11)] == "unknown"      # ia never ran for the row
+    md = md_path.read_text(encoding="utf-8")
+    assert "custody" in md
+
+
+def test_cli_assign_custody_subcommand(m5_db, capsys):
+    conn, tmp_path = m5_db
+    m5.build_workset(conn)
+    db = str(tmp_path / "m5.db")
+    assert cli_main(["--db", db, "assign-custody"]) == 0
+    out = capsys.readouterr().out
+    assert "assign-custody" in out and "unknown=12" in out
+    # recompute is idempotent
+    assert cli_main(["--db", db, "assign-custody"]) == 0
+    assert conn.execute("SELECT COUNT(*) c FROM enrich_status "
+                        "WHERE custody='unknown'"
+                        ).fetchone()["c"] == 12

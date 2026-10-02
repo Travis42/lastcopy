@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS enrich_status (
   sources_checked TEXT,
   checked_at TEXT,
   status TEXT,
-  status_basis TEXT
+  status_basis TEXT,
+  custody TEXT
 );
 CREATE TABLE IF NOT EXISTS ocaid_stage (
   work_key TEXT NOT NULL,
@@ -106,7 +107,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     # M5.5 migration: ia_source / gb_identifier on pre-existing DBs
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(enrich_status)")}
-    for col in ("ia_source", "gb_identifier"):
+    for col in ("ia_source", "gb_identifier", "custody"):
         if col not in cols:
             conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
     # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
@@ -674,7 +675,9 @@ def assign_status(conn: sqlite3.Connection) -> dict:
         "UPDATE enrich_status SET status=?, status_basis=? WHERE isbn13=?",
         updates)
     conn.commit()
-    return {"assigned": len(updates), "counts": dict(counts)}
+    out = {"assigned": len(updates), "counts": dict(counts)}
+    out.update(assign_custody(conn))   # M5.6: chain custody (single entry point)
+    return out
 
 
 def _rule(r) -> tuple[str, str]:
@@ -700,10 +703,49 @@ def _rule(r) -> tuple[str, str]:
     return "VU", f"edition_count={edition_count}; no digital in HT/IA/WD"
 
 
+# ------------------------------------------------- stage 4b (M5.6): custody
+def assign_custody(conn: sqlite3.Connection) -> dict:
+    """M5.6: custody-quality tag, derived purely from existing evidence
+    columns (no re-derivation, no network).  The acquisition queue ranks
+    restricted-custody books above open-custody ones.
+
+      open       — ht_access='allow' OR ia_identifier IS NOT NULL
+                   (IA counts as open by default; the lending-collection
+                   distinction is a future refinement)
+      restricted — readable digital ONLY at Google ('gb_status='full'')
+      none       — no readable digital found anywhere we checked
+      unknown    — checks incomplete (e.g., IA never ran for the row)
+    """
+    ensure_schema(conn)
+    from collections import Counter
+    counts: Counter = Counter()
+    rows = conn.execute(
+        "SELECT isbn13, ht_access, ia_identifier, gb_status, sources_checked "
+        "FROM enrich_status").fetchall()
+    updates = []
+    for r in rows:
+        if r["ht_access"] == "allow" or r["ia_identifier"]:
+            custody = "open"   # definitive positive evidence, order-free
+        else:
+            checked = {s for s in (r["sources_checked"] or "").split(",") if s}
+            if "ia" not in checked:
+                custody = "unknown"
+            elif r["gb_status"] == "full":
+                custody = "restricted"
+            else:   # gb_status NULL or in ('none','metadata')
+                custody = "none"
+        updates.append((custody, r["isbn13"]))
+        counts[custody] += 1
+    conn.executemany("UPDATE enrich_status SET custody=? WHERE isbn13=?",
+                     updates)
+    conn.commit()
+    return {"custody_assigned": len(updates), "custody": dict(counts)}
+
+
 # ------------------------------------------------------------------ export
 WORKSET_HEADER = ["isbn13", "title", "author", "year", "language",
-                  "edition_count", "score", "status", "status_basis",
-                  "gb_status"]
+                  "edition_count", "score", "status", "custody",
+                  "status_basis", "gb_status"]
 
 
 def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
@@ -716,8 +758,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
     order = "CASE s.status WHEN 'CR' THEN 0 WHEN 'EN' THEN 1 WHEN 'VU' THEN 2 " \
             "WHEN 'NT' THEN 3 WHEN 'DD' THEN 4 ELSE 5 END"
     sql = f"""SELECT s.isbn13, c.title, c.year, c.language, w.edition_count,
-                      w.score, s.status, s.status_basis, s.gb_status,
-                      wr.author_keys
+                      w.score, s.status, s.custody, s.status_basis,
+                      s.gb_status, wr.author_keys
               FROM enrich_workset w
               JOIN enrich_status s ON s.isbn13 = w.isbn13
               LEFT JOIN candidates c ON c.isbn13 = w.isbn13
@@ -732,8 +774,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
             wtr.writerow([r["isbn13"], r["title"],
                           m4.resolve_authors(conn, r["author_keys"]),
                           r["year"], r["language"], r["edition_count"],
-                          r["score"], r["status"], r["status_basis"],
-                          r["gb_status"]])
+                          r["score"], r["status"], r["custody"],
+                          r["status_basis"], r["gb_status"]])
         if gb_pending:
             wtr.writerow([f"# {PROVISIONAL_NOTE}"])
     if md_path:
@@ -745,15 +787,16 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                     if gb_pending else "Google Books verification complete."),
                  "",
                  "| # | isbn13 | title | author | year | lang | eds | score "
-                 "| status | status_basis | gb_status |",
-                 "|---|---|---|---|---|---|---|---|---|---|---|"]
+                 "| status | custody | status_basis | gb_status |",
+                 "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, r in enumerate(rows, 1):
             title_ = str(r["title"] or "").replace("|", "\\|")
             author = m4.resolve_authors(conn, r["author_keys"]).replace("|", "\\|")
             lines.append(f"| {i} | {r['isbn13']} | {title_} | {author} "
                          f"| {r['year']} | {r['language'] or ''} "
                          f"| {r['edition_count']} | {r['score']} "
-                         f"| {r['status']} | {r['status_basis']} "
+                         f"| {r['status']} | {r['custody'] or ''} "
+                         f"| {r['status_basis']} "
                          f"| {r['gb_status'] or ''} |")
         if gb_pending:
             lines += ["", f"_{PROVISIONAL_NOTE}._", ""]
