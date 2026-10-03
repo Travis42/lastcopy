@@ -1065,10 +1065,20 @@ def _sru_request(get, url: str, params: dict, sleep, max_retries: int,
                  min_interval: float):
     """SRU GET with the same discipline as _request_json: min-interval
     pacing, exponential backoff on 429/503; returns response text or None."""
+    import httpx
     attempt = 0
     while True:
         sleep(min_interval)
-        resp = get(url, params)
+        try:
+            resp = get(url, params)
+        except httpx.HTTPError:
+            # transport failure mid-crawl (ReadError 'connection reset',
+            # LOC 2026-10-03): same backoff as 429/503, then None
+            if attempt < max_retries - 1:
+                sleep(2.0 ** attempt)
+                attempt += 1
+                continue
+            return None
         if resp.status_code in (429, 503) and attempt < max_retries - 1:
             sleep(2.0 ** attempt)
             attempt += 1

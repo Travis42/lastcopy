@@ -1145,3 +1145,38 @@ def test_custody_report_cli_and_export_column(tmp_path, capsys):
     assert phys[isbn13_for(1)] == "single"
     assert phys[isbn13_for(2)] == "wild"
     conn.close()
+
+
+def test_sru_request_transport_error_retry_and_none():
+    """Regression (2026-10-03): httpx.ReadError mid-LOC-crawl killed job
+    14598 — _sru_request must back off and retry transport errors, then
+    return None (row retried next run) instead of crashing."""
+    import httpx
+    from lastcopy.m5 import _sru_request
+
+    class Resp:
+        ok = True
+        status_code = 200
+        text = "<srw:searchRetrieveResponse/>"
+
+    seq = [httpx.ReadError("connection reset by peer"),
+           httpx.ReadError("connection reset by peer"), Resp()]
+    state = {"i": 0, "sleeps": []}
+
+    def get(url, params):
+        r = seq[state["i"]]
+        state["i"] += 1
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    out = _sru_request(get, "http://x/sru", {}, lambda s: state["sleeps"].append(s), 3, 0)
+    assert out == "<srw:searchRetrieveResponse/>"
+    assert len(state["sleeps"]) == 5          # pacing + 2 backoffs + pacing
+    # always-failing -> None after retries
+    state2 = {"i": 0}
+
+    def bad_get(url, params):
+        raise httpx.ReadError("reset")
+
+    assert _sru_request(bad_get, "http://x/sru", {}, lambda s: None, 3, 0) is None
