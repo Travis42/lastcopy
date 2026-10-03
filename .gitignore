@@ -9,3 +9,4 @@ lastcopy.sqlite*
 .env
 .env.*
 data
+secrets/
