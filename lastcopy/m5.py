@@ -116,7 +116,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     # M5.5 migration: ia_source / gb_identifier on pre-existing DBs
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(enrich_status)")}
     for col in ("ia_source", "gb_identifier", "custody", "custody_physical",
-                "holdings"):
+                "holdings", "pg_id", "gallica_ark"):
         if col not in cols:
             conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
     # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
@@ -357,9 +357,11 @@ def build_ia_plan(conn: sqlite3.Connection, batch: int = IA_BATCH) -> dict:
         """INSERT INTO plan_seed
            SELECT w.isbn13, w.oclc FROM enrich_workset w
            JOIN enrich_status s ON s.isbn13 = w.isbn13
-           WHERE COALESCE(s.ht_access,'') <> 'allow'
-             AND COALESCE(s.wd_fulltext,0) <> 1
-             AND s.ia_identifier IS NULL
+            WHERE COALESCE(s.ht_access,'') <> 'allow'
+              AND COALESCE(s.wd_fulltext,0) <> 1
+              AND s.ia_identifier IS NULL
+              AND s.pg_id IS NULL
+              AND s.gallica_ark IS NULL
            ORDER BY w.isbn13 ASC""")
     elems: list[tuple[int, str, str, list[str], list[str | None]]] = []
     idx = 0
@@ -547,10 +549,11 @@ def merge_ia_results(conn: sqlite3.Connection,
 
 def _resolved(conn: sqlite3.Connection, isbn13: str) -> bool:
     r = conn.execute(
-        "SELECT ht_access, wd_fulltext, ia_identifier FROM enrich_status "
-        "WHERE isbn13=?", (isbn13,)).fetchone()
+        "SELECT ht_access, wd_fulltext, ia_identifier, pg_id, gallica_ark "
+        "FROM enrich_status WHERE isbn13=?", (isbn13,)).fetchone()
     return bool(r and (r["ht_access"] == "allow" or r["wd_fulltext"] == 1
-                       or r["ia_identifier"]))
+                       or r["ia_identifier"] or r["pg_id"]
+                       or r["gallica_ark"]))
 
 
 def _request_json(get, params: dict, sleep, max_retries: int,
@@ -753,7 +756,8 @@ def assign_status(conn: sqlite3.Connection) -> dict:
     """Stage 4: Book Red List rules (pure Python rules + SQL; no network).
 
     Precedence (SPEC-M5-ENRICHMENT "Stage 4"):
-      1. digital_full (ht allow OR wd_fulltext=1 OR ia hit) -> NT
+      1. digital_full (ht allow OR wd_fulltext=1 OR ia hit OR pg_id OR
+         gallica_ark — M6 rescue sources) -> NT
       2. no signals resolvable (absent from HT/IA/WD checks AND no OCLC AND
          not IA-queryable) -> DD
       3. else by edition_count: 1 -> CR, 2-3 -> EN, >=4 -> VU
@@ -764,6 +768,7 @@ def assign_status(conn: sqlite3.Connection) -> dict:
     counts: Counter = Counter()
     rows = conn.execute(
         """SELECT s.isbn13, s.ht_access, s.ia_identifier, s.wd_fulltext,
+                  s.pg_id, s.gallica_ark,
                   s.sources_checked, w.edition_count, w.oclc
            FROM enrich_status s JOIN enrich_workset w ON w.isbn13 = s.isbn13"""
     ).fetchall()
@@ -781,6 +786,15 @@ def assign_status(conn: sqlite3.Connection) -> dict:
     return out
 
 
+def _rowget(r, key):
+    """Column access that tolerates plain-dict rule inputs (tests) missing
+    newer columns."""
+    try:
+        return r[key]
+    except (KeyError, IndexError):
+        return None
+
+
 def _rule(r) -> tuple[str, str]:
     full_srcs = []
     if r["ht_access"] == "allow":
@@ -789,6 +803,10 @@ def _rule(r) -> tuple[str, str]:
         full_srcs.append("wd fulltext")
     if r["ia_identifier"]:
         full_srcs.append("ia hit")
+    if _rowget(r, "pg_id"):
+        full_srcs.append("pg hit")          # M6: Gutenberg rescue
+    if _rowget(r, "gallica_ark"):
+        full_srcs.append("gallica hit")     # M6: Gallica rescue
     if full_srcs:
         return "NT", f"full digital exists ({'+'.join(full_srcs)}); artifact may still be scarce"
     edition_count = r["edition_count"] or 1
@@ -811,8 +829,9 @@ def assign_custody(conn: sqlite3.Connection) -> dict:
     restricted-custody books above open-custody ones.
 
       open       — ht_access='allow' OR ia_identifier IS NOT NULL
-                   (IA counts as open by default; the lending-collection
-                   distinction is a future refinement)
+                    (IA counts as open by default; the lending-collection
+                    distinction is a future refinement) OR a PG/Gallica
+                    rescue hit (M6: free digital)
       restricted — readable digital ONLY at Google ('gb_status='full'')
       none       — no readable digital found anywhere we checked
       unknown    — checks incomplete (e.g., IA never ran for the row)
@@ -821,11 +840,12 @@ def assign_custody(conn: sqlite3.Connection) -> dict:
     from collections import Counter
     counts: Counter = Counter()
     rows = conn.execute(
-        "SELECT isbn13, ht_access, ia_identifier, gb_status, sources_checked "
-        "FROM enrich_status").fetchall()
+        "SELECT isbn13, ht_access, ia_identifier, gb_status, pg_id, "
+        "gallica_ark, sources_checked FROM enrich_status").fetchall()
     updates = []
     for r in rows:
-        if r["ht_access"] == "allow" or r["ia_identifier"]:
+        if (r["ht_access"] == "allow" or r["ia_identifier"] or r["pg_id"]
+                or r["gallica_ark"]):
             custody = "open"   # definitive positive evidence, order-free
         else:
             checked = {s for s in (r["sources_checked"] or "").split(",") if s}
@@ -1229,7 +1249,7 @@ def custody_report(conn: sqlite3.Connection) -> dict:
 WORKSET_HEADER = ["isbn13", "title", "author", "year", "language",
                   "edition_count", "score", "status", "custody",
                   "custody_physical", "holdings",
-                  "status_basis", "gb_status"]
+                  "status_basis", "gb_status", "pg_id", "gallica_ark"]
 
 
 def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
@@ -1244,7 +1264,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
     sql = f"""SELECT s.isbn13, c.title, c.year, c.language, w.edition_count,
                       w.score, s.status, s.custody, s.custody_physical,
                       s.holdings,
-                      s.status_basis, s.gb_status, wr.author_keys
+                      s.status_basis, s.gb_status, s.pg_id, s.gallica_ark,
+                      wr.author_keys
               FROM enrich_workset w
               JOIN enrich_status s ON s.isbn13 = w.isbn13
               LEFT JOIN candidates c ON c.isbn13 = w.isbn13
@@ -1261,8 +1282,9 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                           r["year"], r["language"], r["edition_count"],
                            r["score"], r["status"], r["custody"],
                            r["custody_physical"] or "",
-                           r["holdings"] or "",
-                           r["status_basis"], r["gb_status"]])
+                            r["holdings"] or "",
+                            r["status_basis"], r["gb_status"],
+                            r["pg_id"], r["gallica_ark"]])
         if gb_pending:
             wtr.writerow([f"# {PROVISIONAL_NOTE}"])
     if md_path:
@@ -1275,8 +1297,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                  "",
                   "| # | isbn13 | title | author | year | lang | eds | score "
                   "| status | custody | custody_physical | holdings "
-                  "| status_basis | gb_status |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| status_basis | gb_status | pg_id | gallica_ark |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, r in enumerate(rows, 1):
             title_ = str(r["title"] or "").replace("|", "\\|")
             author = m4.resolve_authors(conn, r["author_keys"]).replace("|", "\\|")
@@ -1286,8 +1308,10 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                           f"| {r['status']} | {r['custody'] or ''} "
                           f"| {r['custody_physical'] or ''} "
                           f"| {r['holdings'] or ''} "
-                         f"| {r['status_basis']} "
-                         f"| {r['gb_status'] or ''} |")
+                          f"| {r['status_basis']} "
+                          f"| {r['gb_status'] or ''} "
+                          f"| {r['pg_id'] or ''} "
+                          f"| {r['gallica_ark'] or ''} |")
         if gb_pending:
             lines += ["", f"_{PROVISIONAL_NOTE}._", ""]
         else:

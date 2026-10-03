@@ -705,6 +705,76 @@ def cmd_custody_report(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------- M6: rescue
+def cmd_fetch_gutenberg(args) -> int:
+    from . import m6
+
+    stats = m6.fetch_gutenberg(args.data_dir,
+                               url=args.url or m6.PG_CATALOG_URL)
+    if "error" in stats:
+        print(f"error: fetch-gutenberg: {stats['error']}", file=sys.stderr)
+        return 1
+    print(f"fetch-gutenberg: {stats['rows']:,} rows -> {stats['file']} "
+          "(resumable curl -C -, CSV-integrity checked)")
+    return 0
+
+
+def cmd_enrich_gutenberg(args) -> int:
+    from . import m4, m5, m6
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m6.enrich_gutenberg(conn, args.catalog,
+                                    gutendex_budget=args.gutendex_budget)
+    finally:
+        conn.close()
+    print(f"enrich-gutenberg: {stats['pg_rows']:,} PG text rows vs "
+          f"{stats['rows_scanned']:,} workset rows -> unique={stats['unique']:,}, "
+          f"gutendex {stats['gutendex_queries']} queried / "
+          f"{stats['gutendex_hits']} hits; pg_id set on {stats['pg_id_set']:,} "
+          "(NT + custody open land via assign-status)")
+    return 0
+
+
+def cmd_fetch_gallica(args) -> int:
+    from . import m6
+
+    try:
+        stats = m6.harvest_gallica(args.stage, args.data_dir,
+                                   max_pages=args.max_pages)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if stats["skipped_done"]:
+        print(f"fetch-gallica: {args.stage} already complete (done marker) "
+              "-> skipped, zero requests")
+        return 0
+    print(f"fetch-gallica: {args.stage} {stats['pages']} page(s), "
+          f"{stats['records']:,} records, {stats['pairs']:,} ark pair(s)"
+          + (" — harvest COMPLETE (done marker written)"
+             if stats["done"] else
+             " — checkpointed, resume by rerunning"
+             + (f" (max-pages {args.max_pages} reached)" if args.max_pages
+                else " (page failed; backoff exhausted)"))
+          + f" under {args.data_dir}")
+    return 0 if stats["done"] or args.max_pages is not None else 1
+
+
+def cmd_parse_gallica(args) -> int:
+    from . import m4, m6
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m6.parse_gallica(conn, args.num_file, args.cat_file)
+    finally:
+        conn.close()
+    print(f"parse-gallica: {stats['num_pairs']:,} num + "
+          f"{stats['cat_pairs']:,} cat pairs -> ark->cb->ISBN join matched "
+          f"{stats['matched']:,} workset ISBN(s); gallica_ark set on "
+          f"{stats['gallica_ark_set']:,} (NT + custody open via assign-status)")
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def _to_year(v):
     try:
@@ -937,6 +1007,54 @@ def build_parser() -> argparse.ArgumentParser:
              "(restricted OR single-institution CR), wild (no holdings), "
              "captive-secure (multi-institution CR) — no status-rule changes")
     sp.set_defaults(fn=cmd_custody_report)
+
+    sp = sub.add_parser(
+        "fetch-gutenberg",
+        help="phase A (M6): download the Project Gutenberg bulk catalog "
+             "pg_catalog.csv (~21MB, resumable curl -C -, CSV-integrity "
+             "checked) under data/gutenberg/ — keyless")
+    sp.add_argument("--data-dir", default="data/gutenberg")
+    sp.add_argument("--url", default=None,
+                    help="catalog URL override (mirror / offline file://)")
+    sp.set_defaults(fn=cmd_fetch_gutenberg)
+
+    sp = sub.add_parser(
+        "enrich-gutenberg",
+        help="phase A (M6): match workset against the PG bulk catalog "
+             "(normalized title + first-author-surname + year±2), resolve "
+             "ambiguous matches via Gutendex ?isbn= (authoritative rescue) "
+             "-> pg_id column; NT via assign-status chain")
+    sp.add_argument("--catalog", required=True,
+                    help="path to pg_catalog.csv from fetch-gutenberg")
+    sp.add_argument("--gutendex-budget", type=int, default=5000,
+                    help="max Gutendex lookups this run (ambiguous rows only)")
+    sp.set_defaults(fn=cmd_enrich_gutenberg)
+
+    sp = sub.add_parser(
+        "fetch-gallica",
+        help="phase B (M6): OAI harvest stage — 'num' (oai.bnf.fr set "
+             "gallica -> gallica-ark/cb-ark pairs) or 'cat' (catoai.bnf.fr "
+             "set catalogue:edition:livres -> cb-ark/ISBN pairs); browser UA "
+             "MANDATORY (403 otherwise), <=1 rps, gzip store, per-page "
+             "checkpoints, resumable by resumptionToken")
+    sp.add_argument("--stage", required=True,
+                    help="'num' (OAI-NUM gallica set) or 'cat' (OAI-CAT "
+                         "catalogue:edition:livres)")
+    sp.add_argument("--data-dir", default="data/gallica")
+    sp.add_argument("--max-pages", type=int, default=None,
+                    help="cap pages this invocation (canary / slicing)")
+    sp.set_defaults(fn=cmd_fetch_gallica)
+
+    sp = sub.add_parser(
+        "parse-gallica",
+        help="phase B (M6): offline join gallica-ark -> cb-ark -> ISBN "
+             "against the workset -> gallica_ark column; NT + custody open "
+             "via assign-status chain")
+    sp.add_argument("--num-file", required=True,
+                    help="num_pairs.tsv.gz from fetch-gallica --stage num")
+    sp.add_argument("--cat-file", required=True,
+                    help="cat_pairs.tsv.gz from fetch-gallica --stage cat")
+    sp.set_defaults(fn=cmd_parse_gallica)
     return p
 
 

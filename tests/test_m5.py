@@ -442,7 +442,7 @@ def test_export_workset_header_order_note(m5_db, tmp_path, capsys):
     lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ("isbn13,title,author,year,language,edition_count,"
                         "score,status,custody,custody_physical,holdings,"
-                        "status_basis,gb_status")
+                        "status_basis,gb_status,pg_id,gallica_ark")
     assert lines[-1] == f"# {m5.PROVISIONAL_NOTE}"
     body = [ln.split(",")[0] for ln in lines[1:-1]]
     st = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
@@ -754,7 +754,7 @@ def test_export_workset_dynamic_provisional_note(m5_db, tmp_path):
     stats = m5.export_workset(conn, csv_path, md_path)
     assert stats["gb_pending"] is False
     lines = csv_path.read_text(encoding="utf-8").splitlines()
-    assert lines[0].endswith(",gb_status")
+    assert lines[0].endswith(",gb_status,pg_id,gallica_ark")
     assert lines[-1].startswith("978")               # data row, no note line
     assert "none" in lines[1].split(",")
     md = md_path.read_text(encoding="utf-8")
