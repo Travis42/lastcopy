@@ -441,8 +441,8 @@ def test_export_workset_header_order_note(m5_db, tmp_path, capsys):
     assert rc == 0
     lines = csv_path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ("isbn13,title,author,year,language,edition_count,"
-                        "score,status,custody,holdings,status_basis,"
-                        "gb_status")
+                        "score,status,custody,custody_physical,holdings,"
+                        "status_basis,gb_status")
     assert lines[-1] == f"# {m5.PROVISIONAL_NOTE}"
     body = [ln.split(",")[0] for ln in lines[1:-1]]
     st = dict(conn.execute("SELECT isbn13, status FROM enrich_status").fetchall())
@@ -1043,3 +1043,105 @@ def test_request_json_transport_error_exhaustion_returns_none():
     assert data is None
     assert calls["n"] == 3                      # max_retries attempts, no more
     assert sleeps == [0.5, 1.0, 0.5, 2.0, 0.5]  # final attempt: no backoff after
+
+
+# ------------------------------------------- M5.9: physical custody
+def _phys_db(tmp_path, rows):
+    """rows = [(isbn13, status, [(institution, record_id), ...])] ->
+    workset + status rows + holdings rows."""
+    conn = m4.connect(tmp_path / "phys.db")
+    m5.ensure_schema(conn)
+    for i, (i13, status, holds) in enumerate(rows):
+        conn.execute("INSERT INTO enrich_workset (isbn13, work_key, "
+                     "edition_count, score, oclc, created_at) "
+                     "VALUES (?,?,1,?,NULL,?)", (i13, f"/works/P{i}", 5,
+                                                 m5.now()))
+        conn.execute("INSERT INTO enrich_status (isbn13, status) "
+                     "VALUES (?,?)", (i13, status))
+        for inst, rid in holds:
+            conn.execute("INSERT OR IGNORE INTO holdings "
+                         "(isbn13, institution, record_id) VALUES (?,?,?)",
+                         (i13, inst, rid))
+    conn.commit()
+    return conn
+
+
+def test_custody_physical_wild_single_multi(tmp_path):
+    conn = _phys_db(tmp_path, [
+        (isbn13_for(1), "CR", []),                          # wild
+        (isbn13_for(2), "CR", [("dnb", "d1")]),             # single
+        (isbn13_for(3), "CR", [("dnb", "d2"), ("loc", "l2")]),  # multi (dnb+loc)
+        (isbn13_for(4), "EN", [("bnf", "b4")]),             # single, non-CR
+    ])
+    stats = m5.assign_holdings_summary(conn)
+    got = dict(conn.execute("SELECT isbn13, custody_physical FROM enrich_status"
+                            ).fetchall())
+    assert got[isbn13_for(1)] == "wild"
+    assert got[isbn13_for(2)] == "single"
+    assert got[isbn13_for(3)] == "multi"
+    assert got[isbn13_for(4)] == "single"
+    assert stats["custody_physical"] == {"wild": 1, "single": 2, "multi": 1}
+    assert dict(conn.execute("SELECT isbn13, holdings FROM enrich_status"
+                             ).fetchall())[isbn13_for(3)] == "dnb,loc"
+    conn.close()
+
+
+def test_custody_physical_unheld_nt_and_idempotency(tmp_path):
+    conn = _phys_db(tmp_path, [
+        (isbn13_for(1), "NT", []),               # digital exists, no holdings
+        (isbn13_for(2), "NT", [("dnb", "d2")]),  # NT + holdings -> single
+    ])
+    m5.assign_holdings_summary(conn)
+    got = dict(conn.execute("SELECT isbn13, custody_physical FROM enrich_status"
+                            ).fetchall())
+    assert got[isbn13_for(1)] == "unheld-nt"
+    assert got[isbn13_for(2)] == "single"
+    # idempotent: rerun keeps identical tags
+    m5.assign_holdings_summary(conn)
+    got2 = dict(conn.execute("SELECT isbn13, custody_physical FROM enrich_status"
+                             ).fetchall())
+    assert got2 == got
+    conn.close()
+
+
+def test_custody_report_buckets(tmp_path):
+    conn = _phys_db(tmp_path, [
+        (isbn13_for(1), "CR", [("dnb", "d1")]),             # safe (CR+single)
+        (isbn13_for(2), "EN", [("dnb", "d2")]),             # single but not CR
+        (isbn13_for(3), "CR", [("dnb", "d3"), ("loc", "l3")]),  # captive-secure
+        (isbn13_for(4), "CR", []),                          # wild
+        (isbn13_for(5), "NT", []),                          # none of the buckets
+    ])
+    # restricted custody (gb-only full) is safe-but-not-really-safe regardless
+    conn.execute("UPDATE enrich_status SET custody='restricted' "
+                 "WHERE isbn13=?", (isbn13_for(2),))
+    conn.commit()
+    m5.assign_holdings_summary(conn)
+    buckets = m5.custody_report(conn)
+    assert buckets == {"safe-but-not-really-safe": 2,   # i1 (CR+single), i2 (restricted)
+                       "wild": 1,                       # i4
+                       "captive-secure": 1}             # i3
+    conn.close()
+
+
+def test_custody_report_cli_and_export_column(tmp_path, capsys):
+    conn = _phys_db(tmp_path, [
+        (isbn13_for(1), "CR", [("dnb", "d1")]),
+        (isbn13_for(2), "CR", []),
+    ])
+    db = str(tmp_path / "phys.db")
+    assert cli_main(["--db", db, "assign-holdings-summary"]) == 0
+    assert cli_main(["--db", db, "custody-report"]) == 0
+    out = capsys.readouterr().out
+    assert "custody-report" in out
+    assert "safe-but-not-really-safe=1" in out and "wild=1" in out
+    assert cli_main(["--db", db, "export-list", "--workset",
+                     "--csv", str(tmp_path / "ws.csv")]) == 0
+    lines = (tmp_path / "ws.csv").read_text(encoding="utf-8").splitlines()
+    hdr = lines[0].split(",")
+    assert hdr.index("custody_physical") == hdr.index("custody") + 1
+    phys = {ln.split(",")[0]: ln.split(",")[hdr.index("custody_physical")]
+            for ln in lines[1:] if ln.startswith("978")}
+    assert phys[isbn13_for(1)] == "single"
+    assert phys[isbn13_for(2)] == "wild"
+    conn.close()

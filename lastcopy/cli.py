@@ -691,6 +691,20 @@ def cmd_assign_holdings_summary(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------- M5.9: custody
+def cmd_custody_report(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        buckets = m5.custody_report(conn)
+    finally:
+        conn.close()
+    print("custody-report: "
+          + ", ".join(f"{k}={v:,}" for k, v in buckets.items()))
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def _to_year(v):
     try:
@@ -916,6 +930,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="M5.7: derive enrich_status.holdings (comma-joined institution "
              "codes) from the holdings table (status/custody untouched)")
     sp.set_defaults(fn=cmd_assign_holdings_summary)
+
+    sp = sub.add_parser(
+        "custody-report",
+        help="M5.9: physical-custody buckets — safe-but-not-really-safe "
+             "(restricted OR single-institution CR), wild (no holdings), "
+             "captive-secure (multi-institution CR) — no status-rule changes")
+    sp.set_defaults(fn=cmd_custody_report)
     return p
 
 

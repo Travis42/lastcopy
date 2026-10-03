@@ -326,7 +326,8 @@ def test_export_holdings_column_after_custody(holdings_db, tmp_path):
     with open(csv_path, newline="", encoding="utf-8") as fh:
         rows = list(_csv.reader(fh))
     hdr = rows[0]
-    assert hdr.index("holdings") == hdr.index("custody") + 1
+    assert hdr.index("custody_physical") == hdr.index("custody") + 1
+    assert hdr.index("holdings") == hdr.index("custody_physical") + 1
     data = {r[0]: r[hdr.index("holdings")] for r in rows[1:]
             if not r[0].startswith("#")}
     assert data[isbn13_for(1)] == "dnb,loc"
@@ -386,7 +387,8 @@ def test_cli_parse_and_export_holdings_csv(holdings_db, tmp_path, capsys):
     ]:
         assert cli_main(["--db", db] + argv) == 0
     hdr = csv_path.read_text(encoding="utf-8").splitlines()[0].split(",")
-    assert hdr.index("holdings") == hdr.index("custody") + 1
+    assert hdr.index("custody_physical") == hdr.index("custody") + 1
+    assert hdr.index("holdings") == hdr.index("custody_physical") + 1
 
 
 # ------------------------------------------------------------ glob --file (2026-10-03)

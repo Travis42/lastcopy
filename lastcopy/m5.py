@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS enrich_status (
   status TEXT,
   status_basis TEXT,
   custody TEXT,
+  custody_physical TEXT,
   holdings TEXT
 );
 CREATE TABLE IF NOT EXISTS holdings (
@@ -114,7 +115,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     # M5.5 migration: ia_source / gb_identifier on pre-existing DBs
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(enrich_status)")}
-    for col in ("ia_source", "gb_identifier", "custody", "holdings"):
+    for col in ("ia_source", "gb_identifier", "custody", "custody_physical",
+                "holdings"):
         if col not in cols:
             conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
     # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
@@ -1149,32 +1151,74 @@ def enrich_holdings(conn: sqlite3.Connection, institution: str,
 
 def assign_holdings_summary(conn: sqlite3.Connection) -> dict:
     """Fill ``enrich_status.holdings`` with comma-joined institution codes
-    (derived, alphabetical); '' when none.  No effect on status/custody."""
+    (derived, alphabetical); '' when none.  Same single pass derives
+    ``custody_physical`` (M5.9): wild (no holdings, non-NT), single (exactly
+    one institution), multi (two+), unheld-nt (status NT, no holdings).
+    No effect on status/custody rules."""
     from collections import Counter
     ensure_schema(conn)
     conn.execute(
-        """UPDATE enrich_status SET holdings = (
-             SELECT COALESCE(GROUP_CONCAT(h.institution), '')
-             FROM (SELECT institution FROM holdings h
-                   WHERE h.isbn13 = enrich_status.isbn13
-                   ORDER BY h.institution ASC) h)""")
+        """UPDATE enrich_status SET
+             holdings = (
+               SELECT COALESCE(GROUP_CONCAT(h.institution), '')
+               FROM (SELECT institution FROM holdings h
+                     WHERE h.isbn13 = enrich_status.isbn13
+                     ORDER BY h.institution ASC) h),
+             custody_physical = (
+               CASE
+                 WHEN (SELECT COUNT(DISTINCT h.institution) FROM holdings h
+                       WHERE h.isbn13 = enrich_status.isbn13) >= 2 THEN 'multi'
+                 WHEN (SELECT COUNT(DISTINCT h.institution) FROM holdings h
+                       WHERE h.isbn13 = enrich_status.isbn13) = 1 THEN 'single'
+                 WHEN status = 'NT' THEN 'unheld-nt'
+                 ELSE 'wild'
+               END)""")
     conn.commit()
     counts: Counter = Counter()
+    phys: Counter = Counter()
     n_rows = n_any = 0
-    for r in conn.execute("SELECT isbn13, holdings FROM enrich_status"):
+    for r in conn.execute("SELECT isbn13, holdings, custody_physical "
+                          "FROM enrich_status"):
         n_rows += 1
         for c in (r["holdings"] or "").split(","):
             if c:
                 counts[c] += 1
         if r["holdings"]:
             n_any += 1
+        if r["custody_physical"]:
+            phys[r["custody_physical"]] += 1
     return {"rows": n_rows, "with_holdings": n_any,
-            "by_institution": dict(counts)}
+            "by_institution": dict(counts),
+            "custody_physical": dict(phys)}
+
+
+def custody_report(conn: sqlite3.Connection) -> dict:
+    """M5.9 physical-custody buckets (Theory's directive: a single
+    undigitized institutional copy is 'safe but not really safe'):
+      safe-but-not-really-safe = custody='restricted' OR
+                                  (status='CR' AND custody_physical='single')
+      wild                     = status='CR' AND custody_physical='wild'
+      captive-secure           = status='CR' AND custody_physical='multi'
+    Pure SQL read, no rule changes."""
+    ensure_schema(conn)
+
+    def _n(where: str) -> int:
+        return conn.execute(
+            f"SELECT COUNT(*) c FROM enrich_status WHERE {where}"
+        ).fetchone()["c"]
+
+    return {"safe-but-not-really-safe":
+            _n("custody='restricted' OR "
+               "(status='CR' AND custody_physical='single')"),
+            "wild": _n("status='CR' AND custody_physical='wild'"),
+            "captive-secure":
+            _n("status='CR' AND custody_physical='multi'")}
 
 
 # ------------------------------------------------------------------ export
 WORKSET_HEADER = ["isbn13", "title", "author", "year", "language",
-                  "edition_count", "score", "status", "custody", "holdings",
+                  "edition_count", "score", "status", "custody",
+                  "custody_physical", "holdings",
                   "status_basis", "gb_status"]
 
 
@@ -1188,7 +1232,8 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
     order = "CASE s.status WHEN 'CR' THEN 0 WHEN 'EN' THEN 1 WHEN 'VU' THEN 2 " \
             "WHEN 'NT' THEN 3 WHEN 'DD' THEN 4 ELSE 5 END"
     sql = f"""SELECT s.isbn13, c.title, c.year, c.language, w.edition_count,
-                      w.score, s.status, s.custody, s.holdings,
+                      w.score, s.status, s.custody, s.custody_physical,
+                      s.holdings,
                       s.status_basis, s.gb_status, wr.author_keys
               FROM enrich_workset w
               JOIN enrich_status s ON s.isbn13 = w.isbn13
@@ -1205,6 +1250,7 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                           m4.resolve_authors(conn, r["author_keys"]),
                           r["year"], r["language"], r["edition_count"],
                            r["score"], r["status"], r["custody"],
+                           r["custody_physical"] or "",
                            r["holdings"] or "",
                            r["status_basis"], r["gb_status"]])
         if gb_pending:
@@ -1218,16 +1264,18 @@ def export_workset(conn: sqlite3.Connection, csv_path: str | Path,
                     if gb_pending else "Google Books verification complete."),
                  "",
                   "| # | isbn13 | title | author | year | lang | eds | score "
-                  "| status | custody | holdings | status_basis | gb_status |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| status | custody | custody_physical | holdings "
+                  "| status_basis | gb_status |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, r in enumerate(rows, 1):
             title_ = str(r["title"] or "").replace("|", "\\|")
             author = m4.resolve_authors(conn, r["author_keys"]).replace("|", "\\|")
             lines.append(f"| {i} | {r['isbn13']} | {title_} | {author} "
                          f"| {r['year']} | {r['language'] or ''} "
                          f"| {r['edition_count']} | {r['score']} "
-                         f"| {r['status']} | {r['custody'] or ''} "
-                         f"| {r['holdings'] or ''} "
+                          f"| {r['status']} | {r['custody'] or ''} "
+                          f"| {r['custody_physical'] or ''} "
+                          f"| {r['holdings'] or ''} "
                          f"| {r['status_basis']} "
                          f"| {r['gb_status'] or ''} |")
         if gb_pending:
