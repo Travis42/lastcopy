@@ -718,7 +718,10 @@ def gb_trickle(conn: sqlite3.Connection, budget: int, *,
     counts: Counter = Counter()
     for r in rows:
         data = _request_json(
-            get, {"q": f"isbn:{r['isbn13']}", "key": key},
+            # 2026-10-03 A/B result (quota-reset test): GB's `isbn:` index
+            # returns 0 results even for known books (P&P 9780141439518);
+            # the PLAIN query returns 5. Use the bare ISBN.
+            get, {"q": r["isbn13"], "key": key},
             sleep, max_retries, min_interval, url=GB_VOLUMES_URL)
         if data is None:
             continue   # request failed -> stays NULL, retried next run

@@ -688,11 +688,11 @@ def test_gb_trickle_statuses_budget_priority_resume(tmp_path, monkeypatch):
     conn = _gb_db(tmp_path, [(i_cr_hi, "CR", 9), (i_cr_lo, "CR", 5),
                              (i_nt, "NT", 99), (i_en, "EN", 7)])
     by_q = {
-        f"isbn:{i_cr_hi}": _gb_resp([   # results, preview only -> metadata
+        i_cr_hi: _gb_resp([   # results, preview only -> metadata
             {"id": "volCRhi", "volumeInfo": {"title": "x"},
              "accessInfo": {"viewability": "PARTIAL"}}]),
-        f"isbn:{i_cr_lo}": _gb_resp([]),                     # 0 results -> none
-        f"isbn:{i_nt}": _gb_resp([   # full view -> full + identifier
+        i_cr_lo: _gb_resp([]),                     # 0 results -> none
+        i_nt: _gb_resp([   # full view -> full + identifier
             {"id": "volNT", "volumeInfo": {},
              "accessInfo": {"viewability": "FULL_PUBLIC_DOMAIN"}}]),
     }
@@ -706,7 +706,7 @@ def test_gb_trickle_statuses_budget_priority_resume(tmp_path, monkeypatch):
     assert all(c["url"] == m5.GB_VOLUMES_URL for c in http.calls)
     assert all(c["params"]["key"] == "TESTKEY" for c in http.calls)
     assert [c["params"]["q"] for c in http.calls] == \
-        [f"isbn:{i_cr_hi}", f"isbn:{i_cr_lo}"]
+        [i_cr_hi, i_cr_lo]
     assert all(s == 1.0 for s in http.sleeps)          # ~1 req/s discipline
     got = dict(conn.execute("SELECT isbn13, gb_status FROM enrich_status"
                             ).fetchall())
@@ -717,16 +717,16 @@ def test_gb_trickle_statuses_budget_priority_resume(tmp_path, monkeypatch):
     assert ident[i_cr_hi] == "volCRhi" and ident[i_cr_lo] is None
     # resume: rerun skips set rows, finishes the rest
     by_q2 = {
-        f"isbn:{i_nt}": _gb_resp([{"id": "volNT",
+        i_nt: _gb_resp([{"id": "volNT",
                                    "accessInfo": {"viewability":
                                                   "FULL_PUBLIC_DOMAIN"}}]),
-        f"isbn:{i_en}": _gb_resp([]),
+        i_en: _gb_resp([]),
     }
     http2 = FakeHTTP(by_q2)
     out2 = m5.gb_trickle(conn, 10, key_file=key_file, get=http2.get,
                          sleep=http2.sleep)
     assert out2["queried"] == 2 and out2["counts"] == {"full": 1, "none": 1}
-    assert f"isbn:{i_cr_hi}" not in [c["params"]["q"] for c in http2.calls]
+    assert i_cr_hi not in [c["params"]["q"] for c in http2.calls]
     got = dict(conn.execute("SELECT isbn13, gb_status FROM enrich_status"
                             ).fetchall())
     assert got[i_nt] == "full" and got[i_en] == "none"
