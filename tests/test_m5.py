@@ -1000,3 +1000,46 @@ def test_cli_results_dir_requires_execute(m5_db, capsys):
     rc = cli_main(["--db", db, "enrich-ia", "--results-dir", "/tmp/nope"])
     assert rc == 2
     assert "requires --execute" in capsys.readouterr().err
+
+
+# ------------------------------------------- transport-error retry (2026-10-03)
+def test_request_json_retries_transport_errors_then_succeeds():
+    """httpx.ConnectError mid-run killed overnight jobs (2026-10-03 BnF
+    postmortem): transport exceptions get the SAME exponential backoff as
+    429/503. Two ConnectErrors then a 200 -> result returned, 2 backoffs."""
+    import httpx
+
+    state = {"n": 0}
+
+    def get(url, params):
+        state["n"] += 1
+        if state["n"] <= 2:
+            raise httpx.ConnectError("connection reset by peer")
+        return FakeResponse(200, {"response": {"numFound": 0, "docs": []}})
+
+    sleeps: list[float] = []
+    data = m5._request_json(get, {"q": "x"}, sleeps.append, max_retries=3,
+                            min_interval=0.5)
+    assert data == {"response": {"numFound": 0, "docs": []}}
+    assert state["n"] == 3                      # 2 raises + 1 success
+    # 3 min-interval sleeps + backoff 2^0 + 2^1
+    assert sleeps == [0.5, 1.0, 0.5, 2.0, 0.5]
+
+
+def test_request_json_transport_error_exhaustion_returns_none():
+    """Always-raising get exhausts retries -> None (failed row, retried
+    next run); never crashes the caller."""
+    import httpx
+
+    calls = {"n": 0}
+
+    def get(url, params):
+        calls["n"] += 1
+        raise httpx.ConnectError("connection reset by peer")
+
+    sleeps: list[float] = []
+    data = m5._request_json(get, {"q": "x"}, sleeps.append, max_retries=3,
+                            min_interval=0.5)
+    assert data is None
+    assert calls["n"] == 3                      # max_retries attempts, no more
+    assert sleeps == [0.5, 1.0, 0.5, 2.0, 0.5]  # final attempt: no backoff after

@@ -554,10 +554,20 @@ def _resolved(conn: sqlite3.Connection, isbn13: str) -> bool:
 def _request_json(get, params: dict, sleep, max_retries: int,
                   min_interval: float = IA_MIN_INTERVAL,
                   url: str = IA_SEARCH_URL):
+    import httpx
     attempt = 0
     while True:
         sleep(min_interval)          # rate discipline: <=1 req/s
-        resp = get(url, params)
+        try:
+            resp = get(url, params)
+        except httpx.HTTPError:
+            # transport-level failure (ConnectError 'connection reset by
+            # peer', 2026-10-03 BnF run): same backoff as 429/503
+            if attempt < max_retries - 1:
+                sleep(2.0 ** attempt)
+                attempt += 1
+                continue
+            return None              # caller treats as failed row, retried next run
         if resp.status_code in (429, 503) and attempt < max_retries - 1:
             backoff = 2.0 ** attempt  # exponential backoff on 429/503
             sleep(backoff)
@@ -916,10 +926,24 @@ def _local(tag: str) -> str:
 
 def _marc_streams(path: str | Path):
     """Yield decoded text streams of MARC21-xml payloads: plain .xml,
-    .xml.gz, or members inside NDL JAPAN/MARC .zip archives."""
+    .xml.gz, or members inside NDL JAPAN/MARC .zip archives.
+
+    Shell-unexpanded glob patterns (CLI callers quoting e.g.
+    '/path/BooksAll.2016.*.xml.gz') are expanded here (2026-10-03
+    postmortem: a literal pattern silently parsed 0 records); a pattern
+    matching nothing raises with the pattern in the message."""
+    import glob as _glob
     import io
     import zipfile
     p = str(path)
+    if any(c in p for c in "*?["):
+        matches = sorted(_glob.glob(p))
+        if not matches:
+            raise FileNotFoundError(
+                f"--file glob pattern matched nothing: {p}")
+        for m in matches:
+            yield from _marc_streams(m)
+        return
     if p.lower().endswith(".zip"):
         with zipfile.ZipFile(p) as zf:
             for name in sorted(zf.namelist()):

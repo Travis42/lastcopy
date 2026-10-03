@@ -387,3 +387,33 @@ def test_cli_parse_and_export_holdings_csv(holdings_db, tmp_path, capsys):
         assert cli_main(["--db", db] + argv) == 0
     hdr = csv_path.read_text(encoding="utf-8").splitlines()[0].split(",")
     assert hdr.index("holdings") == hdr.index("custody") + 1
+
+
+# ------------------------------------------------------------ glob --file (2026-10-03)
+def test_parse_holdings_bulk_expands_glob_patterns(holdings_db, tmp_path):
+    """Shell-unexpanded globs (quoted '/path/BooksAll.2016.*.xml.gz')
+    reaching the process literally must be expanded by the parser
+    (postmortem 2026-10-03: literal pattern silently parsed 0 records)."""
+    conn, _ = holdings_db
+    for part in (1, 2):
+        gz = tmp_path / f"BooksAll.2016.part{part:02d}.xml.gz"
+        with gzip.open(gz, "wt", encoding="utf-8") as fh:
+            fh.write(MARC_DOC.replace("DNB-", f"LC{part}-"))
+    pattern = str(tmp_path / "BooksAll.2016.*.xml.gz")
+    stats = m5.parse_holdings_bulk(conn, "loc", [pattern], progress_every=0)
+    assert stats["records_read"] == 6            # both parts parsed
+    assert stats["isbn_matches"] == 6            # 3 matches per part
+    assert stats["holdings_rows"] == 3           # same ISBNs -> idempotent upsert
+
+
+def test_parse_holdings_bulk_glob_no_match_errors(holdings_db, tmp_path):
+    conn, _ = holdings_db
+    pattern = str(tmp_path / "BooksAll.2016.part99.xml.gz")
+    with pytest.raises(FileNotFoundError) as exc:
+        m5.parse_holdings_bulk(conn, "loc", [pattern], progress_every=0)
+    assert pattern in str(exc.value)
+    # CLI surfaces it cleanly (rc 2), matching fetch-holdings-bulk style
+    db = str(tmp_path / "holdings.db")
+    rc = cli_main(["--db", db, "parse-holdings-bulk", "--institution", "loc",
+                   "--file", pattern])
+    assert rc == 2

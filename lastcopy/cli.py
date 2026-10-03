@@ -649,6 +649,9 @@ def cmd_parse_holdings_bulk(args) -> int:
     conn = m4.connect(args.db)
     try:
         stats = m5.parse_holdings_bulk(conn, args.institution, args.file)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     finally:
         conn.close()
     print(f"parse-holdings-bulk: {args.institution} "
