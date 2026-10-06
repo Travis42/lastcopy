@@ -890,6 +890,8 @@ isbn13,title,author,year,language,edition_count,score,status,custody,custody_phy
 9781939728128,,Rainer Maria Rilke,1909,ger,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782017117049,,Raffaele Garofalo,1892,fre,1,8,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
 9782081404502,,Aeschylus,1889,fre,1,8,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
+9782130442370,,Guy Tiberghien; Jean-Léon Beauvois,1900,fre,1,8,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k48068982
+9782222043249,,Françoise Vielliard,1900,fre,1,8,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3334658n
 9782251002170,,Plato,1920,fre,1,8,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
 9782251010533,,Cicero,1922,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782251010915,,J. Vessereau,1923,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
@@ -897,6 +899,7 @@ isbn13,title,author,year,language,edition_count,score,status,custody,custody_phy
 9782265031722,,Abdülhak Hâmit,1878,ota,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782503360294,,François Benoit,1911,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782706301575,,Alfred Baudrillart,1912,fre,1,8,NT,open,multi,"bnf,dnb,loc",full digital exists (ht allow); artifact may still be scarce,,,
+9782707111128,,,1919,fre,1,8,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3333742t
 9782711751204,,Louis Dufestel,1920,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782717701005,,Bibliothèque nationale de France.,1897,fre,1,8,NT,open,multi,"dnb,loc",full digital exists (ht allow); artifact may still be scarce,,,
 9782723300209,,Abbaye de Saint-Corneille de Compiègne.,1904,fre,1,8,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
@@ -906,10 +909,11 @@ isbn13,title,author,year,language,edition_count,score,status,custody,custody_phy
 9782842850562,,Robert Abbot of Chocques.,1873,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782860380003,,Archives départementales de l'Isère.,1900,fre,1,8,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
 9782860520010,,Archives départementales de la Haute-Marne.,1909,fre,1,8,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
+9782877541015,,Robert Sablayrolles,1900,fre,1,8,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bd6t542087717
 9782906655256,,Jacques Canut,1900,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782909848105,,Poggio Bracciolini; Étienne Wolff,1878,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782924461402,,Éric de Belleval,1926,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
-9782950478603,,Gustave de Beaumont,1839,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782950478603,,Gustave de Beaumont,1839,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow+gallica hit); artifact may still be scarce,,,bpt6k9244n
 9782980418150,,"Lorrain, Jean",1899,fre,1,8,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9783055006210,,Johann Christian Poggendorff,1863,ger,1,8,NT,open,single,dnb,full digital exists (ht allow); artifact may still be scarce,,,
 9783055016721,,Johann Christian Poggendorff,1863,ger,1,8,NT,open,single,dnb,full digital exists (ht allow); artifact may still be scarce,,,
@@ -1328,22 +1332,46 @@ isbn13,title,author,year,language,edition_count,score,status,custody,custody_phy
 9782010007705,,Alexandre Dumas,1969,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782012916432,,Breton M.,1818,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782013238571,,Jehan Bouvelet; Edgar J. Bradby,1929,fre,1,7,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
+9782020000277,,Jeanne Ancelet-Hustache,1955,fre,1,7,NT,open,single,dnb,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4811753v
+9782020000482,,François Rabelais,1960,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3350152r
+9782020000567,,Vladimir Mayakovsky,1961,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4814843r
+9782020000833,,Ludovic Janvier,1969,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k48079994
+9782020066204,,Christopher Frank,1967,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k48031927
 9782070213627,,Alexandre Vialatte,1928,fre,1,7,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
 9782070367887,,Roger Martin du Gard,1951,fre,1,7,NT,open,unheld-nt,,full digital exists (ia hit); artifact may still be scarce,,,
 9782070394852,,Michel Mohrt,1969,fre,1,7,NT,open,unheld-nt,,full digital exists (ia hit); artifact may still be scarce,,,
+9782070482924,,Pierre Siniac,1969,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3403014h
 9782070584215,,Sara Cone Bryant,1926,,1,7,NT,open,single,bnf,full digital exists (ia hit); artifact may still be scarce,,,
 9782070630431,,Thimothee de Fombelle,1813,,1,7,NT,open,single,bnf,full digital exists (ia hit); artifact may still be scarce,,,
 9782070652990,,A. A. Milne,1812,,1,7,NT,open,single,bnf,full digital exists (ia hit); artifact may still be scarce,,,
+9782070718504,,Paul Claudel,1966,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k324961
 9782100486588,,"Leriche, Maurice",1924,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782130360469,,Rene Lalou,1947,fre,1,7,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4814923b
+9782130385547,,Jacques Godechot,1961,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4810730j
+9782200321840,,Georges Dupeux,1969,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4813636m
 9782203187016,,Armand Rio,1930,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782215183129,,,1910,,1,7,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
+9782222015697,,Gérard Cordier,1963,fre,1,7,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3336701t
+9782222034278,,Marie Thérs̀e Morlet,1968,fre,1,7,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k33339309
 9782251000121,,P. Waltz; G Soury,1957,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782251000183,,Felix Buffiere,1960,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782253020219,,Robert Sabatier,1962,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k1002262k
+9782253047117,,Анато́лий Александрович Биск,1968,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k1003423g
+9782259005425,,Auguste Le Breton,1965,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3350361d
+9782259016759,,Zeb Chillicothe,1887,,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k48066902
+9782259021487,,Robert Brasillach,1931,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k3333698v
+9782265038158,,Paul Kenny,1964,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4812936b
+9782266013437,,Élisabeth Barbier,1950,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k10029353
 9782280046718,,,1888,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782501015967,,,1891,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782704900060,,Clément Gardet,1965,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bd6t53475459
 9782705302672,,Louis Jalabert,1929,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782705650698,,Pierre Duhem,1965,fre,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782711823864,,Musée du Louvre. Département des antiquités grecques et romaines.,1954,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k10021768
 9782713100017,,"Exposition internationale des arts décoratifs et industriels modernes (1925 Paris, France)",1925,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782717708868,,Bibliothèque nationale de France.,1939,fre,1,7,NT,open,multi,"bnf,loc",full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4227495v
+9782717716221,,Bibliothèque nationale de France.,1968,fre,1,7,NT,open,single,loc,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k209146t
+9782717718164,,Bibliothèque nationale (France). Département des manuscrits.,1968,fre,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k209149z
 9782719103708,,K. T. Khairallah,1912,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782720401473,,André Vaillant,1928,fre,1,7,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
 9782723496254,,Charles Victor Langlois,1886,,1,7,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
@@ -1360,6 +1388,8 @@ isbn13,title,author,year,language,edition_count,score,status,custody,custody_phy
 9782745977984,,Henrik Pontoppidan,1927,fre,1,7,NT,open,single,bnf,full digital exists (ht allow); artifact may still be scarce,,,
 9782749815084,,,1919,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782764804377,,"Pratt, S. G.",1912,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
+9782863913918,,cerrone-marc,1900,,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k4804192j
+9782869410589,,Adrien Maeght Editeur,1900,,1,7,NT,open,unheld-nt,,full digital exists (gallica hit); artifact may still be scarce,,,bpt6k33951421
 9782876284630,,,1912,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
 9782890076846,,Lucien Campeau,1967,fre,1,7,NT,open,single,loc,full digital exists (ht allow); artifact may still be scarce,,,
 9782891116800,,,1921,,1,7,NT,open,unheld-nt,,full digital exists (ht allow); artifact may still be scarce,,,
