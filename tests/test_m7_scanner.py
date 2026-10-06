@@ -39,25 +39,27 @@ class FakeHTML:
 
 
 # ------------------------------------------------------------------ sampler
-def seed_pilot_db(tmp_path, *, n_eng=3, n_deu=2, n_fra=1, n_other=2,
-                  n_not_wild=2):
-    """Fixture M4/M5 DB: wild CR books across language buckets (score
-    descending by construction) + non-wild rows that must NEVER sample."""
+def seed_pilot_db(tmp_path, *, n_ger=3, n_null=2, n_fre=1, n_und=2,
+                   n_other=1, n_not_wild=2):
+    """Fixture M4/M5 DB with MARC language codes (postmortem 2026-10-06:
+    the wild-CR population runs ger / NULL / fre / und, ~0 eng): wild CR
+    books across strata (score descending by construction) + non-wild
+    rows that must NEVER sample."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     conn = m4.connect(tmp_path / "m7.db")
     from lastcopy import m5
     m5.ensure_schema(conn)
     rows: list[tuple[str, str, int, str, bool]] = []
     i = 0
-    for lang, n in (("eng", n_eng), ("deu", n_deu), ("fra", n_fra),
-                    ("ita", n_other), (None, n_other)):
+    for lang, n in (("ger", n_ger), (None, n_null), ("fre", n_fre),
+                    ("und", n_und), ("ita", n_other)):
         for _ in range(n):
             i += 1
             rows.append((isbn13_for(i), lang, 100 - i,
                          f"Wild Book {i} ({lang or 'null'})", True))
     for _ in range(n_not_wild):
         i += 1
-        rows.append((isbn13_for(i), "eng", 1000 - i, "Not wild", False))
+        rows.append((isbn13_for(i), "ger", 1000 - i, "Not wild", False))
     for i13, lang, score, title, wild in rows:
         wk = f"/works/M7W{i13}"
         conn.execute(
@@ -83,41 +85,58 @@ def seed_pilot_db(tmp_path, *, n_eng=3, n_deu=2, n_fra=1, n_other=2,
 
 def test_build_pilot_sample_strata_counts_and_wild_only(tmp_path):
     conn = seed_pilot_db(tmp_path)
-    books = m7.build_pilot_sample(conn, 500)
+    books = m7.build_pilot_sample(conn, 10)   # quotas 4/2/2/2
     langs = [b.language for b in books]
-    assert langs.count("eng") == 3        # min(quota, available)
-    assert langs.count("deu") == 2
-    assert langs.count("fra") == 1
-    assert langs.count("ita") == 2 and langs.count("other") == 2  # NULL lang
-    # full-SPEC quotas with enough rows: exact 200/150/100/50
-    conn2 = seed_pilot_db(tmp_path / "big", n_eng=210, n_deu=160, n_fra=110,
-                          n_other=60)
+    assert langs.count("ger") == 3            # min(quota, available)
+    assert langs.count("null") == 2
+    assert langs.count("fre") == 1
+    assert langs.count("und") == 2
+    assert len(books) == 8
+    # full-SPEC quotas with enough rows: exact 200 ger/100 NULL/100 fre/
+    # 100 und+other (und 60 first, then misc tops up the last 40)
+    conn2 = seed_pilot_db(tmp_path / "big", n_ger=210, n_null=110, n_fre=110,
+                          n_und=60, n_other=40)
     books2 = m7.build_pilot_sample(conn2, 500)
     langs2 = [b.language for b in books2]
-    assert (langs2.count("eng"), langs2.count("deu"), langs2.count("fra")) \
-        == (200, 150, 100)
-    n_other2 = sum(1 for l in langs2 if l not in ("eng", "deu", "fra"))
-    assert n_other2 == 50                 # ita + NULL-language bucket
-    assert len(books2) == 500
+    assert (langs2.count("ger"), langs2.count("null"), langs2.count("fre")) \
+        == (200, 100, 100)
+    assert langs2.count("und") == 60          # und gets first shot
+    assert len(books2) == 500                 # und 60 + other-misc 40
     # score DESC within strata + wild-only (not-wild rows score 1000 absent)
-    eng_scores = [b.score for b in books2 if b.language == "eng"]
-    assert eng_scores == sorted(eng_scores, reverse=True)
+    ger_scores = [b.score for b in books2 if b.language == "ger"]
+    assert ger_scores == sorted(ger_scores, reverse=True)
     assert all(b.score < 900 for b in books2)
     # sample n scales strata
     books3 = m7.build_pilot_sample(conn2, 50)
-    assert len(books3) <= 60
+    assert len(books3) == 50
     conn.close()
     conn2.close()
 
 
 def test_build_pilot_sample_skips_non_cr(tmp_path):
-    conn = seed_pilot_db(tmp_path, n_eng=1)
-    # flip the only eng row to NT (rescued) — eng stratum must go empty
+    conn = seed_pilot_db(tmp_path, n_ger=1, n_null=0, n_fre=0, n_und=0,
+                         n_other=0)
+    # flip the only ger row to NT (rescued) — the ger stratum goes empty
+    # and the fail-loud guard fires (postmortem item 2)
     conn.execute("UPDATE enrich_status SET status='NT' WHERE isbn13=("
-                 "SELECT isbn13 FROM candidates WHERE language='eng')")
+                 "SELECT isbn13 FROM candidates WHERE language='ger')")
     conn.commit()
-    books = m7.build_pilot_sample(conn, 500)
-    assert all(b.language != "eng" for b in books)
+    with pytest.raises(m7.StratumShortfallError) as exc:
+        m7.build_pilot_sample(conn, 500)
+    assert "ger" in str(exc.value)
+    conn.close()
+
+
+def test_sampler_guard_raises_with_shortfall_table(tmp_path):
+    # fre population collapsed to 10 rows (quota 100 -> <50%): raise,
+    # with the per-stratum shortfall table naming fre (postmortem item 2)
+    conn = seed_pilot_db(tmp_path, n_ger=210, n_null=110, n_fre=10,
+                         n_und=110, n_other=40)
+    with pytest.raises(m7.StratumShortfallError) as exc:
+        m7.build_pilot_sample(conn, 500)
+    msg = str(exc.value)
+    assert "fre: got 10/100" in msg
+    assert "ger" not in msg.splitlines()[1]   # healthy strata not blamed
     conn.close()
 
 
@@ -161,10 +180,10 @@ def test_slug_folds_umaults_and_accents():
 # ----------------------------------------------------------------- parsers
 def test_parse_abebooks_isbn_fixture():
     r = m7.parse_abebooks(fixture("abebooks_isbn.html"))
-    assert r.n_results == 110
-    assert r.top_price == pytest.approx(3.99)   # min first-page price
+    assert r.n_results == 111                # result-count span marker
+    assert r.top_price == pytest.approx(3.99)   # min first-page JSON-LD price
     assert r.currency == "USD"
-    assert r.listing_title == "Pride and Prejudice"
+    assert r.listing_title == "Pride and Prejudice (Penguin Classics)"
 
 
 def test_parse_abebooks_title_fixture():
@@ -178,14 +197,32 @@ def test_parse_abebooks_title_fixture():
 def test_parse_abebooks_zero_hit_without_marker():
     r = m7.parse_abebooks("<html>No marker here</html>")
     assert r.n_results == 0 and r.top_price is None
+    # the OLD marker is gone from the live page: a stale totalResults
+    # template string (plural rule, no number) must NOT count as a hit
+    r2 = m7.parse_abebooks(
+        '"showResults":"{totalResults, plural, =0 {No results} '
+        'other {Show {totalResults} results}}"')
+    assert r2.n_results == 0
 
 
 def test_parse_zvab_fixture():
     r = m7.parse_zvab(fixture("zvab_isbn.html"))
     assert r.n_results == 46                  # "46 Ergebnisse"
-    assert r.top_price == pytest.approx(4.95)  # € 4,95 (comma decimal)
+    assert r.top_price == pytest.approx(4.95)  # EUR<nbp>4,95 (comma decimal)
     assert r.currency == "EUR"
     assert r.listing_title is not None
+
+
+def test_parse_zvab_price_forms():
+    # postmortem item 4: 'EUR\u00a020' (nbsp) joins '€ 20' and 'EUR 20'
+    text = ("3 Ergebnisse"
+            '<span class="price">EUR 20</span>'
+            '<span class="price">€ 12,50</span>'
+            '<span class="price">EUR 8</span>')
+    r = m7.parse_zvab(text)
+    assert r.n_results == 3
+    assert r.top_price == pytest.approx(8.0)  # min across all three forms
+    assert r.currency == "EUR"
 
 
 def test_parse_antiqbook_fixture():
@@ -291,7 +328,7 @@ def test_serp_request_retries_transport_and_429():
                          sleep=lambda s: None)
     text = m7._serp_request(Flaky().get, "https://x/", lim, "abebooks",
                             sleeps.append)
-    assert text is not None and "totalResults" in text
+    assert text is not None and "result-count" in text
     assert sleeps == [1.0, 2.0]           # 2^0 then 2^1 backoff
 
 
@@ -398,9 +435,9 @@ def test_cli_pilot_smoke_fake_get(tmp_path, capsys, monkeypatch):
     # robots fetched first for every source
     assert http.urls[:3] == [m7.SOURCES[s]["robots"]
                              for s in m7.DEFAULT_SOURCES]
-    # per-book per-source <=1 query; --sample 10 -> quotas 4/3/2/1 capped
-    # by availability (3/2/1/4 wild books) = 7 books x 3 sources
-    n_books = 7
+    # per-book per-source <=1 query; --sample 10 -> quotas 4/2/2/2 capped
+    # by availability (3/2/1/2+1 wild books) = 8 books x 3 sources
+    n_books = 8
     serp_urls = [u for u in http.urls if "/robots" not in u]
     assert len(serp_urls) == n_books * 3
     # sightings rows inserted with parsed fixture values
@@ -410,7 +447,7 @@ def test_cli_pilot_smoke_fake_get(tmp_path, capsys, monkeypatch):
     assert len(rows) == n_books * 3
     by_src = {s: [r for r in rows if r["source"] == s]
               for s in m7.DEFAULT_SOURCES}
-    assert all(r["n_results"] == 110 and r["currency"] == "USD"
+    assert all(r["n_results"] == 111 and r["currency"] == "USD"
                for r in by_src["abebooks"])
     assert all(r["n_results"] == 46 and r["currency"] == "EUR"
                for r in by_src["zvab"])
@@ -428,8 +465,8 @@ def test_cli_pilot_smoke_fake_get(tmp_path, capsys, monkeypatch):
 
 def test_cli_pilot_robots_tightened_aborts_source(tmp_path, capsys,
                                                   monkeypatch):
-    conn = seed_pilot_db(tmp_path, n_eng=1, n_deu=0, n_fra=0, n_other=0,
-                         n_not_wild=0)
+    conn = seed_pilot_db(tmp_path, n_ger=1, n_null=1, n_fre=1, n_und=1,
+                         n_other=0, n_not_wild=0)
     conn.close()
     db, out = tmp_path / "m7.db", tmp_path / "sightings.db"
     http = PilotGet({"https://www.abebooks.com/book-search/":
@@ -443,7 +480,7 @@ def test_cli_pilot_robots_tightened_aborts_source(tmp_path, capsys,
                             "zvab": fixture("robots_zvab.txt")})
     monkeypatch.setattr(m7, "_http_get", http.get)
     monkeypatch.setattr(m7, "time", FakeTime())
-    rc = m7.main(["--db", str(db), "--out", str(out), "--sample", "1",
+    rc = m7.main(["--db", str(db), "--out", str(out), "--sample", "4",
                   "--sources", "abebooks,zvab"])
     assert rc == 0
     err = capsys.readouterr().err

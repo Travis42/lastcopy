@@ -2,8 +2,10 @@
 <!-- Trimmed-but-real excerpt of the logged 200 response (749,748 B) to
      https://www.zvab.com/buch-suchen/isbn/9780141439518/
      (research/2026-10-06-scanner-sources.md #13).  Logged markers:
-     "46 Ergebnisse" / "46 Treffer"; same AbeBooks-GmbH platform shape
-     (server HTML + embedded JSON).  Item links are /servlet/ (disallowed
+     "46 Ergebnisse" / "46 Treffer".  Postmortem item 4 (2026-10-06):
+     live pages now render prices as 'EUR&nbsp;<amount>' (nbsp) rather
+     than '€ <amount>'; the spans below carry BOTH real forms (nbsp
+     decoded in the raw bytes).  Item links are /servlet/ (disallowed
      — never followed). -->
 <html lang="de">
 <head><title>Isbn: 9780141439518 - pride and prejudice: jane austen
@@ -22,11 +24,11 @@
 </script>
 <ul class="results">
  <li><a href="/servlet/BookDetailsPL?bi=90000000021">Pride and Prejudice</a>
-     <span class="price">€ 4,95</span></li>
+     <span class="price">EUR 4,95</span></li>
  <li><a href="/servlet/BookDetailsPL?bi=90000000022">Pride and Prejudice</a>
-     <span class="price">€ 9,00</span></li>
+     <span class="price">€ 9,00</span></li>
  <li><a href="/servlet/BookDetailsPL?bi=90000000023">Pride and Prejudice</a>
-     <span class="price">€ 11,85</span></li>
+     <span class="price">EUR 11,85</span></li>
 </ul>
 </body>
 </html>

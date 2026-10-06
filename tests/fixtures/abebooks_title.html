@@ -1,26 +1,44 @@
 <!DOCTYPE html>
-<!-- Trimmed-but-real excerpt of the logged 200 response (236,726 B) to
-     https://www.abebooks.com/book-search/title/Outlines-of-Social-Philosophy/author/Spencer/
-     (research/2026-10-06-scanner-sources.md #3).  Logged markers: 43
-     "Spencer" mentions, embedded JSON with "price":3.54 and a
-     totalResults field.  Item links are /servlet/ (never followed). -->
+<!-- Title/author SERP fixture rebuilt to the live page shape (probe
+     2026-10-06 postmortem of .../isbn/9780141439518/; title-SERP values
+     from the logged research/2026-10-06-scanner-sources.md #3 response:
+     9 results, first-page min price 3.54, Spencer listings).  Same
+     markers as the isbn fixture: result-count span + JSON-LD listings.
+     Item links are /servlet/ (robots-DISALLOWED) — never followed. -->
 <html lang="en">
-<head><title>Outlines of Social Philosophy by Spencer – AbeBooks</title></head>
+<head><title>Outlines of Social Philosophy by Spencer - AbeBooks</title>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ItemList","numberOfItems":9,
+ "itemListElement":[
+ {"@type":"ListItem","position":1,"item":{"@type":"Book",
+  "name":"Outlines of Social Philosophy",
+  "author":{"@type":"Person","name":"Spencer, Herbert"},
+  "publisher":{"@type":"Organization","name":"Horne Books"},
+  "url":"https://www.abebooks.com/Outlines-Social-Philosophy-Spencer-Herbert/31000000011/bd",
+  "offers":{"@type":"Offer","price":25.28,"priceCurrency":"USD",
+   "availability":"https://schema.org/InStock",
+   "itemCondition":"https://schema.org/UsedCondition",
+   "seller":{"@type":"Organization","name":"Horne Books"}}}},
+ {"@type":"ListItem","position":2,"item":{"@type":"Book",
+  "name":"Outlines of Social Philosophy",
+  "author":{"@type":"Person","name":"Spencer, Herbert"},
+  "publisher":{"@type":"Organization","name":"Worldofbooks"},
+  "url":"https://www.abebooks.com/Outlines-Social-Philosophy-Spencer-Herbert/31000000012/bd",
+  "offers":{"@type":"Offer","price":3.54,"priceCurrency":"USD",
+   "availability":"https://schema.org/InStock",
+   "itemCondition":"https://schema.org/UsedCondition",
+   "seller":{"@type":"Organization","name":"Worldofbooks"}}}},
+ {"@type":"ListItem","position":3,"item":{"@type":"Book",
+  "name":"Outlines of Social Philosophy. By Herbert Spencer",
+  "author":{"@type":"Person","name":"Spencer, Herbert"},
+  "publisher":{"@type":"Organization","name":"Antiquariat im Hufhaus"},
+  "url":"https://www.abebooks.com/Outlines-Social-Philosophy-Spencer-Herbert/31000000013/bd",
+  "offers":{"@type":"Offer","price":32.00,"priceCurrency":"USD",
+   "availability":"https://schema.org/InStock",
+   "seller":{"@type":"Organization","name":"Antiquariat im Hufhaus"}}}}]}
+</script></head>
 <body>
-<div class="result-count">9 results</div>
-<script type="application/json" id="__NEXT_DATA__">
-{"totalResults": 9, "results": [
- {"listingId": "11", "title": "Outlines of Social Philosophy",
-  "author": "Spencer, Herbert", "price": 25.28, "currency": "USD",
-  "condition": "Used - Good", "seller": "Horne Books"},
- {"listingId": "12", "title": "Outlines of Social Philosophy",
-  "author": "Spencer, Herbert", "price": 3.54, "currency": "USD",
-  "condition": "Used - Acceptable", "seller": "Worldofbooks"},
- {"listingId": "13", "title": "Outlines of Social Philosophy. By Herbert
-  Spencer", "author": "Spencer, Herbert", "price": 32.00, "currency": "USD",
-  "condition": "Used - Hardcover", "seller": "Antiquariat im Hufhaus"}
-]}
-</script>
-<a href="/servlet/BookDetailsPL?bi=31000000011">Outlines of Social Philosophy</a>
+<h1 data-test-id="page-title"><span>Outlines of Social Philosophy by
+Spencer</span><span data-test-id="result-count"> (9 results)</span></h1>
 </body>
 </html>

@@ -44,9 +44,18 @@ TIMEOUT = 20                  # s per SERP request
 PROGRESS_EVERY = 25           # books between live progress lines
 DEFAULT_SOURCES = ("abebooks", "zvab", "antiqbook")
 
-# pilot strata (SPEC M7 item 1): 200 eng / 150 deu / 100 fra / 50 other
-STRATA = (("eng", 200), ("deu", 150), ("fra", 100), ("other", 50))
+# pilot strata (postmortem 2026-10-06: the wild-CR population uses MARC
+# language codes — ger 17,635 / NULL 12,465 / fre 3,270 / und 2,451 /
+# ~0 eng): n=500 -> ger 200 / NULL 100 / fre 100 / und+other 100, with
+# und getting first shot at the und+other quota.
+STRATA = (("ger", 200), ("null", 100), ("fre", 100), ("und_other", 100))
 _PILOT_TOTAL = sum(q for _, q in STRATA)
+
+
+class StratumShortfallError(RuntimeError):
+    """A sampler stratum returned < 50% of its quota (postmortem item 2:
+    the pilot's silent collapse to the top-50 masked three empty strata).
+    Carries the per-stratum shortfall table in the message; fail LOUD."""
 
 
 @dataclass
@@ -123,20 +132,18 @@ _WILD_WHERE = ("s.status='CR' AND (s.custody_physical IS NULL "
 
 
 def build_pilot_sample(conn: sqlite3.Connection, n: int = 500) -> list[Book]:
-    """Stratified sample of wild books (status CR, no holdings): eng/deu/
-    fra/other buckets, ORDER BY score DESC (isbn13 ASC tiebreak) within
-    each stratum.  Strata quotas scale with n (500 -> the SPEC quotas)."""
+    """Stratified sample of wild books (status CR, no holdings): ger /
+    NULL / fre / und+other (und first, then any other language tops the
+    quota up), ORDER BY score DESC (isbn13 ASC tiebreak) within each
+    stratum.  Strata quotas scale with n (500 -> the SPEC quotas).
+
+    FAIL-LOUD guard: any stratum returning < 50% of its quota raises
+    StratumShortfallError with the per-stratum shortfall table."""
     m5.ensure_schema(conn)
     scale = n / _PILOT_TOTAL
-    books: list[Book] = []
-    for lang, quota in STRATA:
-        q = max(1, round(quota * scale)) if n >= 1 else 0   # >=1 per stratum
-        if q == 0:
-            continue
-        where = (f"c.language='{lang}'" if lang != "other"
-                 else "(c.language IS NULL OR c.language NOT IN "
-                      "('eng','deu','fra'))")
-        rows = conn.execute(
+
+    def fetch(where: str, q: int) -> list:
+        return conn.execute(
             f"""SELECT w.isbn13, c.title, c.year, c.language, w.score,
                        wr.author_keys
                 FROM enrich_status s
@@ -144,13 +151,44 @@ def build_pilot_sample(conn: sqlite3.Connection, n: int = 500) -> list[Book]:
                 LEFT JOIN candidates c ON c.isbn13 = w.isbn13
                 LEFT JOIN works_ref wr ON wr.work_key = w.work_key
                 WHERE {_WILD_WHERE} AND {where}
-                ORDER BY w.score DESC, w.isbn13 ASC LIMIT ?""", (q,)).fetchall()
+                ORDER BY w.score DESC, w.isbn13 ASC LIMIT ?""",
+            (q,)).fetchall()
+
+    books: list[Book] = []
+    shortfalls: list[tuple[str, int, int]] = []
+    for lang, quota in STRATA:
+        q = max(1, round(quota * scale)) if n >= 1 else 0   # >=1 per stratum
+        if q == 0:
+            continue
+        if lang == "und_other":      # und first, misc languages top up
+            rows = fetch("c.language='und'", q)
+            if len(rows) < q:
+                rows += fetch("(c.language IS NOT NULL AND c.language "
+                              "NOT IN ('ger','fre','und'))", q - len(rows))
+        else:
+            where = ("c.language='ger'" if lang == "ger" else
+                     "c.language IS NULL" if lang == "null" else
+                     "c.language='fre'")
+            rows = fetch(where, q)
         for r in rows:
-            books.append(Book(isbn13=r["isbn13"], title=r["title"],
-                              author=m4.resolve_authors(conn, r["author_keys"]),
-                              year=r["year"], language=r["language"] or "other",
-                              score=r["score"] or 0))
+            books.append(_row_to_book(conn, r))
+        if len(rows) * 2 < q:
+            shortfalls.append((lang, len(rows), q))
+    if shortfalls:
+        table = "\n".join(
+            f"  {lang}: got {got}/{quota_want} (<50% of quota)"
+            for lang, got, quota_want in shortfalls)
+        raise StratumShortfallError(
+            "pilot sampler stratum shortfall (population drifted from "
+            f"the postmortem counts):\n{table}")
     return books
+
+
+def _row_to_book(conn: sqlite3.Connection, r) -> Book:
+    return Book(isbn13=r["isbn13"], title=r["title"],
+                author=m4.resolve_authors(conn, r["author_keys"]),
+                year=r["year"], language=r["language"] or "null",
+                score=r["score"] or 0)
 
 
 # ------------------------------------------------------------- rate limiter
@@ -214,12 +252,22 @@ def _serp_request(get, url: str, limiter: RateLimiter, source: str,
 
 
 # ------------------------------------------------------------------ parsers
-_TOTAL_RESULTS_RE = re.compile(r'"totalResults":\s*(\d+)')
-_PRICE_JSON_RE = re.compile(r'"price":\s*([0-9]+(?:\.[0-9]+)?)')
-_CURRENCY_RE = re.compile(r'"currency":\s*"([A-Z]{3})"')
+# AbeBooks live SERP (probe 2026-10-06, postmortem item 3): the embedded
+# '"totalResults": N' app-state is GONE; the count now renders as
+# <span data-test-id="result-count"> (N results)</span> and listings are
+# schema.org JSON-LD items (name / price / priceCurrency).
+_ABE_COUNT_RE = re.compile(
+    r'data-test-id="result-count">\s*\(\s*(\d+)\s+results?\s*\)')
+_PRICE_JSON_RE = re.compile(r'"price":\s*([0-9]+(?:[.,][0-9]+)?)')
+_CURRENCY_RE = re.compile(r'"priceCurrency":\s*"([A-Z]{3})"')
+_JSONLD_NAME_RE = re.compile(r'"@type":"Book",\s*"name":\s*"([^"]{1,200}?)"')
 _JSON_TITLE_RE = re.compile(r'"title":\s*"([^"]{1,200}?)"')
 _ERGEBNISSE_RE = re.compile(r'(\d+)\s+Ergebnisse')
-_EURO_PRICE_RE = re.compile(r'€\s*([0-9]+(?:[.,][0-9]{1,2})?)')
+# ZVAB price forms (postmortem item 4): pages now render 'EUR\u00a020'
+# (nbsp) as well as the older '€ 20'; accept EUR/€ with nbsp or space
+# (or none) before the amount.
+_EURO_PRICE_RE = re.compile(
+    r'(?:€|EUR)[ \u00a0]*([0-9]+(?:[.,][0-9]{1,2})?)')
 _ANTIQ_COUNT_RE = re.compile(r'(\d+)\s+antiquarian books')
 _ANTIQ_LINK_RE = re.compile(
     r'<a[^>]+href="/book/[0-9]+/[^"]*"[^>]*>([^<]{1,200})</a>')
@@ -232,14 +280,15 @@ def _min_price(values: list[str]) -> float | None:
 
 
 def parse_abebooks(text: str) -> ScanResult:
-    """Embedded-JSON SERP: totalResults + first-page listing prices.
-    totalResults marker absent -> 0-hit (SPEC M7 item 4)."""
-    m = _TOTAL_RESULTS_RE.search(text)
+    """Live SERP (probe 2026-10-06): result-count span marker + first-page
+    schema.org JSON-LD listing prices.  Marker absent -> 0-hit (SPEC M7
+    item 4)."""
+    m = _ABE_COUNT_RE.search(text)
     if not m:
         return ScanResult(0, None, None, None)
     n = int(m.group(1))
     cur = _CURRENCY_RE.search(text)
-    title = _JSON_TITLE_RE.search(text)
+    title = _JSONLD_NAME_RE.search(text)
     return ScanResult(n, _min_price(_PRICE_JSON_RE.findall(text)),
                       cur.group(1) if cur else "USD",
                       title.group(1) if title else None)
@@ -456,7 +505,8 @@ def _summarize(out_conn, active, run_row, books, done_books) -> dict:
         for b in books[:done_books]:
             if b.isbn13 not in seen:
                 continue
-            lang = b.language if b.language in ("eng", "deu", "fra") else "other"
+            lang = b.language if b.language in ("ger", "fre", "und") \
+                else ("null" if b.language in (None, "null") else "other")
             d = by_lang.setdefault(lang, {"queried": 0, "hits": 0})
             d["queried"] += 1
             if b.isbn13 in hit_isbns:
@@ -491,7 +541,8 @@ def main(argv=None) -> int:
     p.add_argument("--out", default="data/scanner/sightings.db",
                    help="sightings DB path (created; insert-only)")
     p.add_argument("--sample", type=int, default=500,
-                   help="sample size (500 -> 200 eng/150 deu/100 fra/50 other)")
+                   help="sample size (500 -> 200 ger/100 NULL/100 fre/"
+                        "100 und+other)")
     p.add_argument("--sources", default=",".join(DEFAULT_SOURCES),
                    help="comma list among " + ",".join(DEFAULT_SOURCES))
     p.add_argument("--max-seconds", type=float, default=7200.0,

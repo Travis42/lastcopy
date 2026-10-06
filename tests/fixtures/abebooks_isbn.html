@@ -1,30 +1,61 @@
 <!DOCTYPE html>
-<!-- Trimmed-but-real excerpt of the logged 200 response (747,313 B) to
+<!-- Trimmed-but-real excerpt of the live 200 response (753,489 B, probe
+     2026-10-06 postmortem) to
      https://www.abebooks.com/book-search/isbn/9780141439518/
-     (research/2026-10-06-scanner-sources.md #2, 2026-10-06).
-     Shape: server-rendered shell + embedded JSON app-state carrying
-     totalResults and per-listing bare-number prices.  Result detail
-     links point to /servlet/ (robots-DISALLOWED) — never followed. -->
+     The embedded '"totalResults": N' app-state is GONE.  Count marker is
+     now the server-rendered span:
+       <span data-test-id="result-count"> (111 results)</span>
+     and listings are schema.org JSON-LD itemListElement items carrying
+     name / price / priceCurrency (real values below).  Item detail URLs
+     point at /bd/ pages reached via /servlet/ (robots-DISALLOWED) —
+     never followed. -->
 <html lang="en">
-<head><title>Isbn: 9780141439518 - Pride and Prejudice – AbeBooks</title></head>
+<head><title>Isbn: 9780141439518 - Pride and Prejudice - AbeBooks</title>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ItemList","numberOfItems":111,
+ "itemListElement":[
+ {"@type":"ListItem","position":1,"item":{"@type":"Book",
+  "name":"Pride and Prejudice (Penguin Classics)","isbn":"9780141439518",
+  "bookFormat":"https://schema.org/Paperback","bookEdition":"Auflage: Revised.",
+  "author":{"@type":"Person","name":"Austen, Jane:"},
+  "publisher":{"@type":"Organization","name":"Penguin Classics 30.01.2003."},
+  "image":"https://pictures.abebooks.com/isbn/9780141439518-us._SL300_.jpg",
+  "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Classics-Austen-Jane/20861232863/bd",
+  "offers":{"@type":"Offer","price":5.72,"priceCurrency":"USD",
+   "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Classics-Austen-Jane/20861232863/bd",
+   "availability":"https://schema.org/InStock",
+   "itemCondition":"https://schema.org/UsedCondition",
+   "seller":{"@type":"Organization","name":"Better World Books"}}},
+ {"@type":"ListItem","position":2,"item":{"@type":"Book",
+  "name":"Pride and Prejudice","isbn":"9780141439518",
+  "bookFormat":"https://schema.org/Paperback",
+  "author":{"@type":"Person","name":"Austen, Jane:"},
+  "publisher":{"@type":"Organization","name":"Penguin Books"},
+  "image":"https://pictures.abebooks.com/isbn/9780141439518-us._SL300_.jpg",
+  "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Classics-Jones-Vivien/31456445077/bd",
+  "offers":{"@type":"Offer","price":3.99,"priceCurrency":"USD",
+   "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Classics-Jones-Vivien/31456445077/bd",
+   "availability":"https://schema.org/InStock",
+   "itemCondition":"https://schema.org/UsedCondition",
+   "seller":{"@type":"Organization","name":"Phatpocket Limited"}}},
+ {"@type":"ListItem","position":3,"item":{"@type":"Book",
+  "name":"Pride and Prejudice","isbn":"9780141439518",
+  "bookFormat":"https://schema.org/Paperback",
+  "author":{"@type":"Person","name":"Jones, Vivien:"},
+  "publisher":{"@type":"Organization","name":"Penguin Publishing Group"},
+  "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Books/32322145701/bd",
+  "offers":{"@type":"Offer","price":9.59,"priceCurrency":"USD",
+   "url":"https://www.abebooks.com/Pride-Prejudice-Penguin-Books/32322145701/bd",
+   "availability":"https://schema.org/InStock",
+   "seller":{"@type":"Organization","name":"BooksRun"}}}]}
+</script></head>
 <body>
-<div class="result-count">110 results</div>
-<script type="application/json" id="__NEXT_DATA__">
-{"totalResults": 110, "results": [
- {"listingId": "1", "title": "Pride and Prejudice", "author": "Austen, Jane",
-  "price": 4.43, "currency": "USD", "condition": "Used - Good",
-  "seller": "Better World Books"},
- {"listingId": "2", "title": "Pride and Prejudice", "author": "Austen, Jane",
-  "price": 3.99, "currency": "USD", "condition": "Used - Acceptable",
-  "seller": "Phatpocket Limited"},
- {"listingId": "3", "title": "Pride and Prejudice", "author": "Austen, Jane",
-  "price": 5.61, "currency": "USD", "condition": "Used - VeryGood",
-  "seller": "BooksRun"},
- {"listingId": "4", "title": "Pride and Prejudice", "author": "Austen, Jane",
-  "price": 7.28, "currency": "USD", "condition": "New",
-  "seller": "The Monster Bookshop"}
-]}
-</script>
-<a href="/servlet/BookDetailsPL?bi=31000000001">Pride and Prejudice</a>
+<h1 class="VersoHeading" data-test-id="page-title" aria-live="polite"
+    aria-atomic="true" aria-relevant="text"><span>Isbn: 9780141439518 -
+Pride and Prejudice</span><span class="VersoTypography"
+ data-test-id="result-count"> (111 results)</span></h1>
+<nav aria-label="Result Navigation1" data-test-id="pagination-top">
+ <a href="/servlet/SearchResults?bsi=30&amp;ds=30&amp;dym=on&amp;isbn=9780141439518&amp;rollup=on&amp;sortby=20">2</a>
+</nav>
 </body>
 </html>
