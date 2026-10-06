@@ -451,6 +451,13 @@ def cmd_export_list(args) -> int:
     conn = m4.connect(args.db)
     try:
         if getattr(args, "workset", False):
+            if args.editions_dump:
+                # M6.1: was silently ignored — titles for the workset come
+                # from backfill-titles, not from this export path.
+                print("error: --editions-dump is ignored by the workset "
+                      "export (titles come from candidates.title — run "
+                      "backfill-titles first)", file=sys.stderr)
+                return 2
             stats = m5.export_workset(conn, args.csv or
                                       str(Path(args.md).with_suffix(".csv")),
                                       args.md)
@@ -719,6 +726,22 @@ def cmd_fetch_gutenberg(args) -> int:
     return 0
 
 
+def cmd_backfill_titles(args) -> int:
+    from . import m4, m6
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m6.backfill_titles(conn, args.editions_dump,
+                                   progress_every=args.progress_every)
+    finally:
+        conn.close()
+    print(f"backfill-titles: {stats['records_read']:,} dump records → "
+          f"{stats['titles_filled']:,} titles filled "
+          f"({stats['previously_filled']:,} already set) for "
+          f"{stats['workset_isbns']:,} workset rows")
+    return 0
+
+
 def cmd_enrich_gutenberg(args) -> int:
     from . import m4, m5, m6
 
@@ -726,6 +749,9 @@ def cmd_enrich_gutenberg(args) -> int:
     try:
         stats = m6.enrich_gutenberg(conn, args.catalog,
                                     gutendex_budget=args.gutendex_budget)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     finally:
         conn.close()
     print(f"enrich-gutenberg: {stats['pg_rows']:,} PG text rows vs "
@@ -1017,6 +1043,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--url", default=None,
                     help="catalog URL override (mirror / offline file://)")
     sp.set_defaults(fn=cmd_fetch_gutenberg)
+
+    sp = sub.add_parser(
+        "backfill-titles",
+        help="M6.1 stage 0: stream the editions dump once -> fill "
+             "candidates.title for the enrich_workset (pre-enrich; "
+             "NULL-only, never clobbers, idempotent)")
+    sp.add_argument("--editions-dump", required=True,
+                    help="local gz editions dump path "
+                         "(ol_dump_editions_latest.txt.gz)")
+    sp.add_argument("--progress-every", type=int, default=1_000_000,
+                    help="progress log every N dump records (0 disables)")
+    sp.set_defaults(fn=cmd_backfill_titles)
 
     sp = sub.add_parser(
         "enrich-gutenberg",

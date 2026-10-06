@@ -63,6 +63,63 @@ _ISBN_FIELD_RE = re.compile(r"^\s*ISBN\s+([0-9Xx\-]+)")
 
 
 # ------------------------------------------------------------------ phase A
+TITLE_BATCH = 10_000             # rows per executemany flush (RAM-bounding knob)
+
+
+def backfill_titles(conn, editions_dump: str | Path, *,
+                    progress_every: int = 1_000_000) -> dict:
+    """M6.1: stream the editions dump once; fill ``candidates.title`` for
+    the enrich_workset (pre-enrich stage).  Semantics match
+    ``m4._backfill_titles`` exactly — title precedence
+    ``title or full_title or subtitle``, ISBNs from ``isbn_13`` +
+    ``isbn_10`` (folded to 13), first match wins per ISBN13, titleless
+    records skipped — but writes ONLY where ``candidates.title IS NULL``
+    (never clobbers; idempotent on reruns)."""
+    m5.ensure_schema(conn)
+    workset = {r["isbn13"]
+               for r in conn.execute("SELECT isbn13 FROM enrich_workset")}
+    already = {r["isbn13"] for r in conn.execute(
+        "SELECT w.isbn13 FROM enrich_workset w "
+        "JOIN candidates c ON c.isbn13 = w.isbn13 "
+        "WHERE c.title IS NOT NULL")}
+    titles: dict[str, str] = {}
+    batch: list[tuple[str, str]] = []
+    records_read = 0
+
+    def _flush() -> None:
+        if batch:
+            conn.executemany(
+                "UPDATE candidates SET title=? WHERE isbn13=? "
+                "AND title IS NULL", list(batch))
+            conn.commit()
+            batch.clear()
+
+    with m4.open_dump(path=editions_dump) as fh:
+        for key, obj in m4.iter_dump_records(fh, progress_every, "titles"):
+            if key == "_summary":
+                records_read = obj["read"]
+                continue
+            if not key.startswith("/books/"):
+                continue
+            title = obj.get("title") or obj.get("full_title") \
+                or obj.get("subtitle")
+            if not title:
+                continue
+            for raw in [*m4._as_list(obj.get("isbn_13")),
+                        *m4._as_list(obj.get("isbn_10"))]:
+                norm = normalize_isbn(str(raw))
+                if (norm and norm[0] in workset and norm[0] not in already
+                        and norm[0] not in titles):
+                    titles[norm[0]] = str(title)
+                    batch.append((str(title), norm[0]))
+                    if len(batch) >= TITLE_BATCH:
+                        _flush()
+        _flush()
+    return {"records_read": records_read, "workset_isbns": len(workset),
+            "titles_filled": len(titles),
+            "previously_filled": len(already)}
+
+
 def fetch_gutenberg(data_dir: str | Path = "data/gutenberg",
                     *, url: str = PG_CATALOG_URL, timeout: int = 0) -> dict:
     """Download pg_catalog.csv (resumable curl -C -, IPv4) into
@@ -208,8 +265,18 @@ def enrich_gutenberg(conn, catalog: str | Path, *,
            JOIN enrich_status s ON s.isbn13 = w.isbn13
            LEFT JOIN candidates c ON c.isbn13 = w.isbn13
            LEFT JOIN works_ref wr ON wr.work_key = w.work_key
-           WHERE s.pg_id IS NULL AND c.title IS NOT NULL
-           ORDER BY w.isbn13 ASC""").fetchall()
+            WHERE s.pg_id IS NULL AND c.title IS NOT NULL
+            ORDER BY w.isbn13 ASC""").fetchall()
+    # M6.1 fail-loud (incident 14827): a silent 0-row scan means the
+    # workset titles are NULL — unless every row is already checked
+    # (idempotent rerun), which must NOT raise.
+    if not todo:
+        unchecked = _n(conn, "pg_id IS NULL")
+        if unchecked:
+            raise RuntimeError(
+                f"enrich-gutenberg: 0 rows scanned but {unchecked:,} workset "
+                "rows unchecked — candidates.title is NULL for the workset; "
+                "run backfill-titles --editions-dump first")
     unique = gutendex = gutendex_hits = 0
     n = 0
     for r in todo:

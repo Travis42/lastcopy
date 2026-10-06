@@ -20,6 +20,7 @@ from lastcopy.cli import build_parser
         ["report", "--help"],
         ["survey", "--help"],
         ["confirm", "--help"],
+        ["backfill-titles", "--help"],
     ],
 )
 def test_help_exits_cleanly(argv):
