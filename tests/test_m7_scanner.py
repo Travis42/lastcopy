@@ -497,3 +497,105 @@ def test_cli_pilot_rejects_unknown_source(tmp_path):
     with pytest.raises(SystemExit) as exc:
         m7.main(["--db", str(tmp_path / "x.db"), "--sources", "ebay"])
     assert exc.value.code == 2
+
+
+# ------------------------------------------------- language inference (M7+)
+def test_infer_language_clear_cases():
+    assert m7.infer_language(
+        "The History of the English People, Complete") == "eng"
+    assert m7.infer_language(
+        "Die Geschichte der Stadt und ihrer Bewohner") == "ger"
+    assert m7.infer_language(
+        "Histoire de la vie du peuple dans les villes") == "fre"
+
+
+def test_infer_language_ambiguous_and_null():
+    # one marker each side: no language reaches 2 -> None
+    assert m7.infer_language("Complete des") is None
+    # no markers at all -> None
+    assert m7.infer_language("Opuscula Quaedam") is None
+    # NULL/empty title -> None
+    assert m7.infer_language(None) is None
+    assert m7.infer_language("") is None
+
+
+def test_infer_language_negative_dominance_blocks_eng():
+    # >=2 eng markers but German function words dominate -> NOT eng
+    assert m7.infer_language(
+        "The Life of der und von dem und zur Zeit") == "ger"
+    # tie at >=2 with no clean winner -> 'other'
+    assert m7.infer_language("The History le sur") == "other"
+
+
+# ------------------------------------------------------ scanner-english-set
+def test_cli_english_set_counts_and_csv(tmp_path, capsys):
+    conn = seed_pilot_db(tmp_path, n_ger=0, n_null=2, n_fre=1, n_und=3,
+                         n_other=0, n_not_wild=1)
+    # insertion order: 1-2 NULL, 3 fre, 4-6 und, 7 not-wild
+    def set_book(i, title, lang):
+        conn.execute("UPDATE candidates SET title=?, language=? "
+                     "WHERE isbn13=?", (title, lang, isbn13_for(i)))
+    set_book(1, "The History of the English Church", None)   # infers eng
+    set_book(2, "Kleines Worterbuch", None)                  # None -> out
+    set_book(3, "La vie des poissons", "fre")                # lang filter
+    set_book(4, "Letters and Life of Robert Browning", "und")  # infers eng
+    set_book(5, "Die Geschichte der Alchemie", "und")        # infers ger
+    set_book(6, "Opuscula Quaedam", "eng")                   # MARC eng
+    set_book(7, "The Complete Poems and Letters", None)      # NOT wild
+    conn.commit()
+    conn.close()
+    out = tmp_path / "english_wild.csv"
+    rc = m7.main_english_set(["--db", str(tmp_path / "m7.db"),
+                              "--out", str(out)])
+    assert rc == 0
+    import csv
+    with open(out, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    assert [r["isbn13"] for r in rows] == [isbn13_for(1), isbn13_for(4),
+                                           isbn13_for(6)]
+    assert rows[0]["lang_inferred"] == "eng"
+    assert rows[0]["language_code"] == ""        # NULL language -> empty
+    assert rows[1]["language_code"] == "und"
+    assert rows[2]["language_code"] == "eng"     # MARC eng, inferred ""
+    assert rows[2]["lang_inferred"] == ""
+    assert rows[0]["title"] == "The History of the English Church"
+    stdout = capsys.readouterr().out
+    assert "3 rows" in stdout
+    assert "2 title-inferred eng" in stdout
+    assert "1 MARC eng" in stdout
+
+
+# --------------------------------------------------------- --isbn-file path
+def test_cli_pilot_isbn_file_bypasses_sampler(tmp_path, monkeypatch):
+    conn = seed_pilot_db(tmp_path)   # 9 wild + 2 not-wild
+    conn.close()
+    db, out = tmp_path / "m7.db", tmp_path / "sightings.db"
+    # listed: wild ger(1), wild other(9), NOT-wild(10) — sampler filters
+    # would never take 10 — plus an unknown ISBN (absent from the DB)
+    listed = [isbn13_for(1), isbn13_for(9), isbn13_for(10),
+              isbn13_for(99)]
+    isbn_file = tmp_path / "isbns.txt"
+    isbn_file.write_text(
+        "# explicit sweep list\n" + "\n".join(listed) + "\n\n",
+        encoding="utf-8")
+    serp = {"https://www.abebooks.com/book-search/":
+            fixture("abebooks_isbn.html"),
+            "https://www.zvab.com/buch-suchen/": fixture("zvab_isbn.html"),
+            "https://www.antiqbook.com/search": fixture("antiqbook_q.html")}
+    http = PilotGet(serp)
+    monkeypatch.setattr(m7, "_http_get", http.get)
+    monkeypatch.setattr(m7, "time", FakeTime())
+    rc = m7.main(["--db", str(db), "--out", str(out),
+                  "--isbn-file", str(isbn_file)])
+    assert rc == 0
+    wanted = set(listed[:3])            # unknown ISBN(99) never queried
+    sconn = sqlite3.connect(out)
+    sconn.row_factory = sqlite3.Row
+    seen = {r["isbn13"] for r in
+            sconn.execute("SELECT isbn13 FROM sightings")}
+    assert seen == wanted               # exactly the listed, in-DB ISBNs
+    run = sconn.execute("SELECT * FROM runs").fetchone()
+    assert run["n_books"] == 3
+    sconn.close()
+    serp_urls = [u for u in http.urls if "/robots" not in u]
+    assert len(serp_urls) == 3 * 3      # 3 books x 3 sources, nothing else

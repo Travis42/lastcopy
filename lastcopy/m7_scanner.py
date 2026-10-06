@@ -191,6 +191,131 @@ def _row_to_book(conn: sqlite3.Connection, r) -> Book:
                 score=r["score"] or 0)
 
 
+_BOOK_SELECT = """SELECT w.isbn13, c.title, c.year, c.language, w.score,
+                          wr.author_keys
+                   FROM enrich_workset w
+                   LEFT JOIN candidates c ON c.isbn13 = w.isbn13
+                   LEFT JOIN works_ref wr ON wr.work_key = w.work_key
+                   WHERE w.isbn13=?"""
+
+
+def books_for_isbns(conn: sqlite3.Connection,
+                    isbns: list[str]) -> list[Book]:
+    """Explicit ISBN list -> Book rows (sampler BYPASSED entirely: no
+    wild-CR filter, no strata, no quotas — the caller listed exactly
+    what to sweep).  ISBNs unknown to the DB are silently absent."""
+    books: list[Book] = []
+    for i13 in isbns:
+        r = conn.execute(_BOOK_SELECT, (i13,)).fetchone()
+        if r is not None:
+            books.append(_row_to_book(conn, r))
+    return books
+
+
+def read_isbn_file(path: str | Path) -> list[str]:
+    """One ISBN (13) per line; blanks and '#' comments skipped."""
+    out: list[str] = []
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            out.append(line)
+    return out
+
+
+# ------------------------------------------------- english-set (theory dir.)
+def english_set_rows(conn: sqlite3.Connection) -> list[dict]:
+    """Wild-CR books whose MARC language is eng/NULL/und/empty, with the
+    title-language inference attached (pure read — nothing is stored).
+    Rows where inference says 'eng' OR the MARC code already says 'eng'
+    are the English-first sweep set."""
+    m5.ensure_schema(conn)
+    rows = conn.execute(
+        f"""SELECT w.isbn13, c.title, c.year, c.language, w.score,
+                   wr.author_keys
+            FROM enrich_status s
+            JOIN enrich_workset w ON w.isbn13 = s.isbn13
+            LEFT JOIN candidates c ON c.isbn13 = w.isbn13
+            LEFT JOIN works_ref wr ON wr.work_key = w.work_key
+            WHERE {_WILD_WHERE}
+              AND (c.language IS NULL OR c.language=''
+                   OR c.language IN ('eng','und'))
+            ORDER BY w.score DESC, w.isbn13 ASC""").fetchall()
+    out: list[dict] = []
+    for r in rows:
+        lang_code = r["language"] or ""
+        inferred = infer_language(r["title"])
+        if inferred == "eng" or lang_code == "eng":
+            out.append({"isbn13": r["isbn13"], "title": r["title"],
+                        "author": m4.resolve_authors(conn, r["author_keys"]),
+                        "year": r["year"], "language_code": lang_code,
+                        "lang_inferred": inferred or ""})
+    return out
+
+
+def write_english_csv(rows: list[dict], out: str | Path) -> None:
+    import csv
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=("isbn13", "title", "author",
+                                           "year", "language_code",
+                                           "lang_inferred"))
+        w.writeheader()
+        w.writerows(rows)
+
+
+# ------------------------------------------------------ language inference
+# Theory directive (English-first sweep): a pure title classifier — no
+# state in m4.db.  English markers are common function/content words of
+# English-language book titling; the negative markers are the equivalent
+# German/French function words.  eng requires >=2 markers AND no
+# negative-language dominance (ger/fre symmetric); anything else -> None.
+ENGLISH_MARKERS = frozenset((
+    "the", "of", "and", "history", "story", "life", "letters", "works",
+    "poems", "manual", "introduction", "studies", "principles", "tales",
+    "adventures", "memoir", "memoirs", "selected", "complete", "practical",
+    "elementary", "essays", "novel", "guide", "handbook", "course",
+    "lectures", "treatise", "methods", "theory", "practice", "text",
+    "reader", "collection", "volume", "edition", "being", "study",
+    "nature", "england", "english", "american", "london"))
+GERMAN_MARKERS = frozenset((
+    "der", "die", "das", "und", "von", "mit", "fur", "zur", "auf", "den",
+    "dem", "ein", "eine", "geschichte"))
+FRENCH_MARKERS = frozenset((
+    "le", "la", "les", "des", "du", "une", "dans", "pour", "sur"))
+
+
+def _title_tokens(title: str | None) -> list[str]:
+    """ASCII-folded, lowercased word tokens of a title."""
+    if not title:
+        return []
+    s = unicodedata.normalize("NFKD", str(title))
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.findall(r"[a-z]+", s.lower())
+
+
+def infer_language(title: str | None) -> str | None:
+    """'eng' | 'ger' | 'fre' | 'other' | None from title words alone.
+
+    eng: >=2 English markers and strictly more than either negative-
+    language count (no negative dominance); ger/fre symmetric.  'other'
+    when some language reaches >=2 markers but no clean winner emerges
+    (tie); None when nothing reaches 2 markers (or the title is NULL)."""
+    tokens = _title_tokens(title)
+    if not tokens:
+        return None
+    n_eng = sum(t in ENGLISH_MARKERS for t in tokens)
+    n_ger = sum(t in GERMAN_MARKERS for t in tokens)
+    n_fre = sum(t in FRENCH_MARKERS for t in tokens)
+    for code, n, n_a, n_b in (("eng", n_eng, n_ger, n_fre),
+                              ("ger", n_ger, n_eng, n_fre),
+                              ("fre", n_fre, n_eng, n_ger)):
+        if n >= 2 and n > n_a and n > n_b:
+            return code
+    if max(n_eng, n_ger, n_fre) >= 2:
+        return "other"
+    return None
+
+
 # ------------------------------------------------------------- rate limiter
 class RateLimiter:
     """Min-interval pacing PER SOURCE.  ``clock``/``sleep`` injectable for
@@ -435,17 +560,21 @@ def run_pilot(conn: sqlite3.Connection, out: str | Path,
               sample: int = 500, sources=DEFAULT_SOURCES, *,
               get=None, sleep=None, limiter: RateLimiter | None = None,
               max_seconds: float | None = None,
-              progress_every: int = PROGRESS_EVERY) -> dict:
-    """The pilot sweep: stratified sample -> round-robin per-source queries
-    (<=1 query per book per source) -> insert-only sightings.  Robots is
-    checked FIRST; tightened sources are aborted and skipped."""
+              progress_every: int = PROGRESS_EVERY,
+              books: list[Book] | None = None) -> dict:
+    """The pilot sweep: stratified sample (or an explicit ``books`` list
+    — --isbn-file bypasses the sampler entirely) -> round-robin
+    per-source queries (<=1 query per book per source) -> insert-only
+    sightings.  Robots is checked FIRST; tightened sources are aborted
+    and skipped."""
     if get is None:
         get = _http_get
     if sleep is None:
         sleep = time.sleep     # resolved at call time (test patch point)
     if limiter is None:
         limiter = RateLimiter(sleep=sleep)
-    books = build_pilot_sample(conn, sample)
+    if books is None:
+        books = build_pilot_sample(conn, sample)
     verdicts = check_robots(sources, get)
     active = [s for s in sources if verdicts[s]["ok"]]
     for src, v in verdicts.items():
@@ -545,6 +674,9 @@ def main(argv=None) -> int:
                         "100 und+other)")
     p.add_argument("--sources", default=",".join(DEFAULT_SOURCES),
                    help="comma list among " + ",".join(DEFAULT_SOURCES))
+    p.add_argument("--isbn-file", default=None,
+                   help="explicit ISBN list (one per line, '#' comments); "
+                        "bypasses the stratified sampler entirely")
     p.add_argument("--max-seconds", type=float, default=7200.0,
                    help="wall-clock cap for the sweep")
     args = p.parse_args(argv)
@@ -554,12 +686,51 @@ def main(argv=None) -> int:
         p.error(f"unknown source(s): {','.join(bad)}")
     conn = m4.connect(args.db)
     try:
+        books = None
+        if args.isbn_file:
+            isbns = read_isbn_file(args.isbn_file)
+            if not isbns:
+                p.error(f"--isbn-file {args.isbn_file} lists no ISBNs")
+            books = books_for_isbns(conn, isbns)
+            if not books:
+                p.error("--isbn-file: none of the listed ISBNs are in "
+                        f"{args.db}")
         summary = run_pilot(conn, args.out, args.sample, sources,
-                            max_seconds=args.max_seconds)
+                            max_seconds=args.max_seconds, books=books)
     finally:
         conn.close()
     return 0 if summary.get("books_done", 0) > 0 or not summary["sources"] \
         else 1
+
+
+def main_english_set(argv=None) -> int:
+    """scanner-english-set: the theory-directive English-first sweep set —
+    wild-CR books with language eng/NULL/und/empty whose titles infer as
+    English (or whose MARC code already says eng).  Pure read + CSV; the
+    classifier stores NOTHING in the M4 DB."""
+    import argparse
+    p = argparse.ArgumentParser(
+        prog="scanner-english-set",
+        description="English-first sweep set: wild-CR books (language "
+                    "eng/NULL/und/empty) whose titles infer English -> "
+                    "CSV (isbn13, title, author, year, language_code, "
+                    "lang_inferred).")
+    p.add_argument("--db", default="lastcopy.db", help="M4/M5 SQLite DB path")
+    p.add_argument("--out", default="english_wild.csv",
+                   help="output CSV path")
+    args = p.parse_args(argv)
+    conn = m4.connect(args.db)
+    try:
+        rows = english_set_rows(conn)
+    finally:
+        conn.close()
+    write_english_csv(rows, args.out)
+    n_inferred = sum(1 for r in rows if r["lang_inferred"] == "eng")
+    n_marc = sum(1 for r in rows if r["language_code"] == "eng")
+    print(f"[english-set] {len(rows)} rows -> {args.out} "
+          f"({n_inferred} title-inferred eng, {n_marc} MARC eng, "
+          f"{n_inferred + n_marc} union)")
+    return 0
 
 
 if __name__ == "__main__":
