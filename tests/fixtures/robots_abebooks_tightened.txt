@@ -1,0 +1,16 @@
+# www.abebooks.com/robots.txt — TIGHTENED variant for the abort test:
+# identical to the logged 2026-10-06 snapshot EXCEPT the added
+# "Disallow: /book-search/" line covering our query paths.
+User-agent: *
+Disallow: /servlet/
+Disallow: /abe/
+Disallow: /abep/
+Disallow: /cgi/
+Disallow: /search/
+Disallow: /book-search/
+Disallow: /docs/Newsletters/BD
+Disallow: /es/docs/BooksellerCentral/informativos
+Disallow: /collections/
+Disallow: /checkout/
+Disallow: /discovery/
+Disallow: /docs/asdfrawq/

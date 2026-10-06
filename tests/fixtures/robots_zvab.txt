@@ -1,0 +1,14 @@
+# www.zvab.com/robots.txt (200, 2,864 B — research/2026-10-06-scanner-
+# sources.md §4): the `*` group disallows /search/ (and /servlet/ family)
+# but NOT /buch-suchen/ (only rogerbot gets that disallow, and rogerbot
+# is not us).  Fixture trimmed to the `*` group.
+User-agent: *
+Disallow: /servlet/
+Disallow: /abe/
+Disallow: /abep/
+Disallow: /cgi/
+Disallow: /search/
+Disallow: /*/$galleryLink
+Disallow: /sammlungen/
+Disallow: /checkout/
+Disallow: /discovery/

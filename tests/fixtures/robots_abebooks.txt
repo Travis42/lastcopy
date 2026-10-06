@@ -1,0 +1,19 @@
+# Real User-agent: * group from www.abebooks.com/robots.txt
+# (200, 3,415 B — research/2026-10-06-scanner-sources.md §1, 2026-10-06).
+# /book-search/ is NOT disallowed; no Crawl-delay.  Fixture is trimmed
+# to the `*` group rulings the compliance guard diffs against.
+User-agent: *
+Disallow: /servlet/
+Disallow: /abe/
+Disallow: /abep/
+Disallow: /cgi/
+Disallow: /search/
+Disallow: /docs/Newsletters/BD
+Disallow: /es/docs/BooksellerCentral/informativos
+Disallow: /collections/
+Disallow: /checkout/
+Disallow: /discovery/
+Disallow: /docs/asdfrawq/
+
+Sitemap: https://www.abebooks.com/sitemap.bdp_index.xml
+Sitemap: https://www.abebooks.com/sitemap.plp_index.xml

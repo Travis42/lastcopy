@@ -1,0 +1,17 @@
+# www.antiqbook.com/robots.txt (200, 370 B — research/2026-10-06-scanner-
+# sources.md §11): search fully open; only account/cart/ajax paths are
+# disallowed for `*`.  Fixture reproduces the logged rulings.
+User-agent: *
+Disallow: /account
+Disallow: /klant
+Disallow: /register
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /help
+Disallow: /cart
+Disallow: /orders/*
+Disallow: /payment/
+Disallow: /book/inquiry/
+Disallow: /ajax/
+
+Sitemap: https://www.antiqbook.com/sitemap.xml
