@@ -23,6 +23,7 @@ dev = ["pytest>=8"]
 lastcopy = "lastcopy.cli:main"
 scanner-pilot = "lastcopy.m7_scanner:main"
 scanner-english-set = "lastcopy.m7_scanner:main_english_set"
+scanner-calibration = "lastcopy.m7_scanner:main_calibration"
 
 [tool.setuptools.packages.find]
 include = ["lastcopy*"]

@@ -444,6 +444,46 @@ PARSERS = {"abebooks": parse_abebooks, "zvab": parse_zvab,
            "antiqbook": parse_antiqbook}
 
 
+# ------------------------------------------------------ circulation tiers
+# APPROVED schema (Theory 2026-10-09: "seems like a good schema").  Pure
+# function; tiers influence NO scoring until the calibration hand-check
+# (scanner-calibration) has verified the counts against live SERPs.
+def circulation_tier(offerings: int | None, min_price: float | None) -> str:
+    """'wild' (0/no offerings) | 'mild' (1-2) | 'steady' (3-5) |
+    'common-in-trade' (>=6 AND a known min price < 15.0 — many cheap
+    listings) | 'steady+' (>=6 but expensive or price unknown: many
+    listings, yet none of them cheap)."""
+    n = offerings or 0
+    if n <= 0:
+        return "wild"
+    if n <= 2:
+        return "mild"
+    if n <= 5:
+        return "steady"
+    if min_price is not None and min_price < 15.0:
+        return "common-in-trade"
+    return "steady+"
+
+
+def market_aggregates(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Per-book market view over the sightings store: ``offerings`` =
+    summed n_results of the LATEST sighting per source (insert-only rows,
+    so MAX(id) per (isbn13, source) group is the most recent sweep —
+    repeat sweeps never double-count) and ``min_price`` = cheapest
+    top_price among those latest rows.  Input to circulation_tier and to
+    the calibration sample."""
+    out: dict[str, dict] = {}
+    for r in conn.execute(
+            "SELECT isbn13, source, n_results, top_price FROM sightings "
+            "WHERE isbn13 IS NOT NULL AND id IN (SELECT MAX(id) FROM "
+            "sightings WHERE isbn13 IS NOT NULL GROUP BY isbn13, source)"):
+        d = out.setdefault(r["isbn13"], {"offerings": 0, "prices": []})
+        d["offerings"] += r["n_results"] or 0
+        if r["top_price"] is not None:
+            d["prices"].append(r["top_price"])
+    return out
+
+
 # --------------------------------------------------------------- robots guard
 def _robots_star_disallows(text: str) -> list[str]:
     """Disallow paths from the User-agent: * group(s) (empty value = allow)."""
@@ -731,6 +771,63 @@ def main_english_set(argv=None) -> int:
           f"({n_inferred} title-inferred eng, {n_marc} MARC eng, "
           f"{n_inferred + n_marc} union)")
     return 0
+
+
+def main_calibration(argv=None) -> int:
+    """scanner-calibration: n random sighted books -> CSV hand-check
+    sample (isbn13, title via m4 ATTACH, offerings_est, search links).
+    The calibration step BEFORE tiers influence any scoring: Theory
+    clicks the links and verifies our recorded counts against what the
+    SERPs actually show."""
+    import argparse
+    import csv
+    p = argparse.ArgumentParser(
+        prog="scanner-calibration",
+        description="Calibration hand-check sample: n random sighted "
+                    "books with summed offerings + search links, so the "
+                    "recorded counts can be verified by clicking through "
+                    "(before circulation tiers influence any scoring).")
+    p.add_argument("--db", default="data/scanner/sightings.db",
+                   help="sightings DB path (read-only)")
+    p.add_argument("--m4", default="lastcopy.db",
+                   help="M4/M5 SQLite DB path, ATTACHed for titles")
+    p.add_argument("--n", type=int, default=30,
+                   help="sample size (random sighted books)")
+    p.add_argument("--out", default="docs/scanner/calibration_sample.csv",
+                   help="output CSV path")
+    args = p.parse_args(argv)
+    conn = sqlite3.connect(str(args.db))
+    conn.row_factory = sqlite3.Row
+    conn.execute("ATTACH DATABASE ? AS m4db", (str(args.m4),))
+    agg = market_aggregates(conn)
+    isbns = [r["isbn13"] for r in conn.execute(
+        "SELECT isbn13 FROM sightings WHERE isbn13 IS NOT NULL "
+        "GROUP BY isbn13 ORDER BY RANDOM() LIMIT ?", (args.n,))]
+    fieldnames = ("isbn13", "title", "offerings_est") \
+        + tuple(f"link_{s}" for s in DEFAULT_SOURCES)
+    rows: list[dict] = []
+    for i13 in isbns:
+        meta = conn.execute(
+            "SELECT c.title, w.score FROM m4db.candidates c "
+            "LEFT JOIN m4db.enrich_workset w ON w.isbn13 = c.isbn13 "
+            "WHERE c.isbn13 = ?", (i13,)).fetchone()
+        title = meta["title"] if meta is not None else None
+        book = Book(i13, title, None, None, None, 0)
+        row = {"isbn13": i13, "title": title or "",
+               "offerings_est": agg.get(i13, {}).get("offerings", 0)}
+        for src in DEFAULT_SOURCES:
+            row[f"link_{src}"] = build_query(src, book)[0]
+        rows.append(row)
+    conn.close()
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    with open(args.out, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"[calibration] {len(rows)} books -> {args.out} "
+          f"(offerings summed latest-per-source; click the links and "
+          f"verify the counts)")
+    return 0 if rows else 1
 
 
 if __name__ == "__main__":

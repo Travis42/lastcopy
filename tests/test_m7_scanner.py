@@ -599,3 +599,146 @@ def test_cli_pilot_isbn_file_bypasses_sampler(tmp_path, monkeypatch):
     sconn.close()
     serp_urls = [u for u in http.urls if "/robots" not in u]
     assert len(serp_urls) == 3 * 3      # 3 books x 3 sources, nothing else
+
+
+# ------------------------------------------------------ circulation tiers
+def test_circulation_tier_boundaries():
+    ct = m7.circulation_tier
+    # 0 / 'none' -> wild (unknown offerings behave like zero)
+    assert ct(0, None) == "wild"
+    assert ct(None, None) == "wild"
+    # 1-2 -> mild (price irrelevant at this scarcity)
+    assert ct(1, None) == "mild"
+    assert ct(2, 100.0) == "mild"
+    # 3-5 -> steady
+    assert ct(3, None) == "steady"
+    assert ct(5, 1.0) == "steady"
+    # >=6 AND known cheap min price -> common-in-trade
+    assert ct(6, 5.0) == "common-in-trade"
+    assert ct(6, 14.99) == "common-in-trade"
+    assert ct(600, 0.01) == "common-in-trade"
+    # >=6 otherwise -> steady+ (expensive, or price unknown)
+    assert ct(6, 15.0) == "steady+"     # 15.0 is NOT < 15.0
+    assert ct(6, None) == "steady+"     # 6 expensive / unknown-price
+    assert ct(100, 50.0) == "steady+"
+
+
+def _sight(i13: str, source: str, n: int, price: float | None,
+           currency: str = "USD") -> None:
+    m7.record_sighting(_sight.conn, i13, source,
+                       m7.ScanResult(n, price, currency if n else None,
+                                     None),
+                       "isbn", f"https://x/{i13}/{source}")
+
+
+def test_market_aggregates_latest_per_source(tmp_path):
+    conn = m7.connect_out(tmp_path / "sightings.db")
+    _sight.conn = conn
+    a, b = isbn13_for(1), isbn13_for(2)
+    _sight(a, "abebooks", 10, 4.0)          # book a: 10 + 2, min 3.0
+    _sight(a, "zvab", 2, 3.0)
+    _sight(b, "abebooks", 0, None)          # book b: 0 offerings
+    _sight(a, "abebooks", 7, 12.0)          # repeat sweep: latest wins
+    agg = m7.market_aggregates(conn)
+    assert agg[a]["offerings"] == 9         # 7 (latest) + 2, not 10+2+7
+    assert min(agg[a]["prices"]) == pytest.approx(3.0)
+    assert agg[b]["offerings"] == 0
+    conn.close()
+
+
+# ------------------------------------------------------ scanner-calibration
+def test_cli_calibration_csv_shape(tmp_path, capsys):
+    mconn = seed_pilot_db(tmp_path)         # titles via m4 ATTACH
+    title1 = mconn.execute(
+        "SELECT title FROM candidates WHERE isbn13=?",
+        (isbn13_for(1),)).fetchone()["title"]
+    mconn.close()
+    sdb = tmp_path / "sightings.db"
+    conn = m7.connect_out(sdb)
+    _sight.conn = conn
+    _sight(isbn13_for(1), "abebooks", 10, 4.0)
+    _sight(isbn13_for(1), "zvab", 2, 3.0)
+    _sight(isbn13_for(2), "abebooks", 0, None)
+    conn.close()
+    out = tmp_path / "calibration_sample.csv"
+    rc = m7.main_calibration(["--db", str(sdb), "--m4",
+                              str(tmp_path / "m7.db"), "--n", "30",
+                              "--out", str(out)])
+    assert rc == 0
+    import csv
+    with open(out, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+        assert reader.fieldnames == ["isbn13", "title", "offerings_est",
+                                     "link_abebooks", "link_zvab",
+                                     "link_antiqbook"]
+    assert len(rows) == 2                   # both sighted books sampled
+    by_isbn = {r["isbn13"]: r for r in rows}
+    r1 = by_isbn[isbn13_for(1)]
+    assert r1["title"] == title1            # resolved via m4 ATTACH
+    assert r1["offerings_est"] == "12"      # summed latest-per-source
+    assert r1["link_abebooks"] == (
+        f"https://www.abebooks.com/book-search/isbn/{isbn13_for(1)}/")
+    assert r1["link_zvab"].endswith(f"/isbn/{isbn13_for(1)}/")
+    assert f"q={isbn13_for(1)}" in r1["link_antiqbook"]
+    assert by_isbn[isbn13_for(2)]["offerings_est"] == "0"
+    assert "2 books" in capsys.readouterr().out
+
+
+def test_cli_calibration_n_limits_sample(tmp_path):
+    mconn = seed_pilot_db(tmp_path)
+    mconn.close()
+    sdb = tmp_path / "sightings.db"
+    conn = m7.connect_out(sdb)
+    _sight.conn = conn
+    for i in range(1, 5):
+        _sight(isbn13_for(i), "abebooks", i, 2.0)
+    conn.close()
+    out = tmp_path / "cal.csv"
+    rc = m7.main_calibration(["--db", str(sdb), "--m4",
+                              str(tmp_path / "m7.db"), "--n", "3",
+                              "--out", str(out)])
+    assert rc == 0
+    import csv
+    with open(out, newline="", encoding="utf-8") as fh:
+        assert len(list(csv.DictReader(fh))) == 3   # random subset of 4
+
+
+# --------------------------------------------------------- findings.py CSV
+def _load_findings():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "findings", Path(__file__).resolve().parent.parent / "scripts"
+        / "findings.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_findings_csv_risk_tier_after_currency(tmp_path):
+    findings = _load_findings()
+    mconn = seed_pilot_db(tmp_path)
+    mconn.close()
+    sdb = tmp_path / "sightings.db"
+    conn = m7.connect_out(sdb)
+    _sight.conn = conn
+    a, b = isbn13_for(1), isbn13_for(2)
+    _sight(a, "abebooks", 10, 4.0)          # 12 offerings, min 3.0
+    _sight(a, "zvab", 2, 3.0, currency="EUR")
+    _sight(b, "abebooks", 0, None)          # 0 offerings -> wild
+    conn.close()
+    out = tmp_path / "findings.csv"
+    n = findings.write_findings(sdb, tmp_path / "m7.db", out)
+    assert n == 3                            # per-sighting rows
+    import csv
+    with open(out, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+        assert reader.fieldnames[:9] == [
+            "isbn13", "title", "year", "score", "source", "n_results",
+            "top_price", "currency", "risk_tier"]      # after currency
+    tiers = {r["isbn13"]: r["risk_tier"] for r in rows}
+    assert tiers[a] == "common-in-trade"     # 12 offerings, min 3.0 < 15
+    assert tiers[b] == "wild"
+    # titles resolved via the m4 ATTACH
+    assert all(r["title"].startswith("Wild Book") for r in rows)
