@@ -119,6 +119,11 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
                 "holdings", "pg_id", "gallica_ark"):
         if col not in cols:
             conn.execute(f"ALTER TABLE enrich_status ADD COLUMN {col} TEXT")
+    # M8 migration: holdings.detail — space-joined per-library codes
+    # (k10plus union holdings); NULL on national-library rows
+    hcols = {r["name"] for r in conn.execute("PRAGMA table_info(holdings)")}
+    if "detail" not in hcols:
+        conn.execute("ALTER TABLE holdings ADD COLUMN detail TEXT")
     # direct IA-search hits predate the column -> 'search' (ocaid rows keep 'ocaid')
     conn.execute("UPDATE enrich_status SET ia_source='search' "
                  "WHERE ia_identifier IS NOT NULL AND ia_source IS NULL")
@@ -867,7 +872,7 @@ def assign_custody(conn: sqlite3.Connection) -> dict:
 # Physical-holdings evidence from legal-deposit national libraries
 # (SPEC-M5.7-HOLDINGS).  Status/custody rules are UNTOUCHED this phase:
 # holdings refine acquisition priority only.
-HOLDINGS_INSTITUTIONS = ("bnf", "dnb", "loc", "ndl")
+HOLDINGS_INSTITUTIONS = ("bnf", "dnb", "loc", "ndl", "k10plus")
 
 # Verified bulk sources (research/2026-10-02-national-library-holdings.md):
 #   dnb — full MARC21-xml copy, 5 parts ~12.3GB / 37.2M records, anonymous
@@ -1076,6 +1081,11 @@ SRU_ENDPOINTS = {
             "query": 'bib.isbn all "{isbn}"', "schema": "unimarcxchange"},
     "loc": {"url": "http://lx2.loc.gov:210/lcdb", "version": "1.1",
             "query": "bath.isbn={isbn}", "schema": "mods"},
+    # M8: K10plus GVK union catalog (GBV+SWB) — free, keyless, verified live
+    # 2026-10-09; picaxml records carry per-library holdings as 209A $B codes
+    # (fixture tests/fixtures/k10plus_pica.xml, real response excerpt).
+    "k10plus": {"url": "https://sru.k10plus.de/gvk", "version": "1.1",
+                "query": "pica.isb={isbn}", "schema": "picaxml"},
 }
 HOLDINGS_MIN_INTERVAL = 0.5     # <=2 rps sustained per host
 HOLDINGS_MAX_RETRIES = 3        # exponential backoff on 429/503
@@ -1130,6 +1140,41 @@ def _parse_sru(text: str) -> tuple[int, str | None]:
     return n, rec_id
 
 
+def _parse_pica_holdings(text: str) -> tuple[int, str | None, list[str]]:
+    """(numberOfRecords, PPN, distinct holding library codes) from a GVK
+    picaxml searchRetrieve response.  Physical ownership lives in local
+    datafield 209A subfield $B (verified from the real fixture response:
+    '751', '291/309', '15', '16/24', '77/004'); the record id is the PPN
+    in 003@ $0.  Codes are collected across ALL returned records in
+    document order, deduplicated (multiple records = sibling editions)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return 0, None, []
+    n = 0
+    ppn: str | None = None
+    codes: list[str] = []
+    for el in root.iter():
+        t = _local(el.tag)
+        if t == "numberOfRecords" and el.text and el.text.strip().isdigit():
+            n = int(el.text.strip())
+        elif t == "datafield" and el.get("tag") == "003@" and ppn is None:
+            for sf in el:
+                if (_local(sf.tag) == "subfield" and sf.get("code") == "0"
+                        and (sf.text or "").strip()):
+                    ppn = sf.text.strip()
+                    break
+        elif t == "datafield" and el.get("tag") == "209A":
+            for sf in el:
+                if (_local(sf.tag) == "subfield" and sf.get("code") == "B"
+                        and (sf.text or "").strip()):
+                    v = sf.text.strip()
+                    if v not in codes:
+                        codes.append(v)
+    return n, ppn, codes
+
+
 def enrich_holdings(conn: sqlite3.Connection, institution: str,
                     budget: int, *, get=None, sleep=time.sleep,
                     min_interval: float = HOLDINGS_MIN_INTERVAL,
@@ -1165,11 +1210,17 @@ def enrich_holdings(conn: sqlite3.Connection, institution: str,
         if text is None:
             failed += 1          # stays rowless -> retried next run
             continue
-        n, rec_id = _parse_sru(text)
+        if institution == "k10plus":
+            n, rec_id, codes = _parse_pica_holdings(text)
+            detail = " ".join(codes) or None
+        else:
+            n, rec_id = _parse_sru(text)
+            detail = None
         if n > 0:
             conn.execute("INSERT OR IGNORE INTO holdings "
-                         "(isbn13, institution, record_id) VALUES (?,?,?)",
-                         (r["isbn13"], institution, rec_id))
+                         "(isbn13, institution, record_id, detail) "
+                         "VALUES (?,?,?,?)",
+                         (r["isbn13"], institution, rec_id, detail))
             conn.commit()
             held += 1
         else:
@@ -1243,6 +1294,58 @@ def custody_report(conn: sqlite3.Connection) -> dict:
             "wild": _n("status='CR' AND custody_physical='wild'"),
             "captive-secure":
             _n("status='CR' AND custody_physical='multi'")}
+
+
+# ------------------------------------------------- M8: union-catalog holdings
+def union_holdings_report(conn: sqlite3.Connection,
+                          institution: str = "k10plus") -> dict:
+    """M8: custody_physical deltas attributable to a union-catalog holdings
+    source (default k10plus).  For every workset ISBN holding a row from
+    ``institution``, count the OTHER distinct institutions also holding it
+    and bucket the reclassification the union row caused:
+
+      wild->single    — no other institution (rescued by academic/state
+                        libraries; the union catalog is the ONLY evidence)
+      single->multi   — exactly one other institution (now captive-secure)
+      already-multi   — two+ others (classification unchanged)
+
+    Pure SQL read over the holdings table (assign-holdings-summary must
+    have run for custody_physical to reflect it, but the buckets here are
+    derived independently of that column)."""
+    ensure_schema(conn)
+    rows = conn.execute(
+        f"""SELECT COUNT(*) n FROM enrich_status s
+            WHERE EXISTS (SELECT 1 FROM holdings h
+                          WHERE h.isbn13 = s.isbn13
+                            AND h.institution = ?)""",
+        (institution,)).fetchone()
+    buckets = {"wild_to_single": 0, "single_to_multi": 0, "already_multi": 0}
+    detail_rows = 0
+    for r in conn.execute(
+            """SELECT u.isbn13,
+                      (SELECT COUNT(DISTINCT h.institution) FROM holdings h
+                       WHERE h.isbn13 = u.isbn13
+                         AND h.institution <> ?) AS others,
+                      (SELECT COUNT(DISTINCT h2.detail) FROM holdings h2
+                       WHERE h2.isbn13 = u.isbn13
+                         AND h2.institution = ?) AS with_detail
+             FROM (SELECT DISTINCT isbn13 FROM holdings
+                   WHERE institution = ?) u""",
+            (institution, institution, institution)):
+        if r["others"] == 0:
+            buckets["wild_to_single"] += 1
+        elif r["others"] == 1:
+            buckets["single_to_multi"] += 1
+        else:
+            buckets["already_multi"] += 1
+        if r["with_detail"]:
+            detail_rows += 1
+    return {"institution": institution,
+            "books_with_union_holding": rows["n"],
+            "with_library_detail": detail_rows,
+            "deltas": buckets,
+            "rescued_total": buckets["wild_to_single"]
+            + buckets["single_to_multi"]}
 
 
 # ------------------------------------------------------------------ export

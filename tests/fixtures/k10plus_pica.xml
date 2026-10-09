@@ -1,0 +1,907 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zs:searchRetrieveResponse xmlns:zs="http://www.loc.gov/zing/srw/"><zs:version>1.1</zs:version><zs:numberOfRecords>2</zs:numberOfRecords><zs:records><zs:record><zs:recordSchema>picaxml</zs:recordSchema><zs:recordPacking>xml</zs:recordPacking><zs:recordData><record xmlns="info:srw/schema/5/picaXML-v1.0">
+  <datafield tag="001@">
+    <subfield code="0">100,2044</subfield>
+  </datafield>
+  <datafield tag="001A">
+    <subfield code="0">3100:09-09-21</subfield>
+  </datafield>
+  <datafield tag="001B">
+    <subfield code="0">1999:26-12-25</subfield>
+    <subfield code="t">19:47:32.000</subfield>
+  </datafield>
+  <datafield tag="001D">
+    <subfield code="0">3100:09-09-21</subfield>
+  </datafield>
+  <datafield tag="001U">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="001X">
+    <subfield code="0">0</subfield>
+  </datafield>
+  <datafield tag="002@">
+    <subfield code="0">Aau</subfield>
+  </datafield>
+  <datafield tag="002C">
+    <subfield code="a">Text</subfield>
+    <subfield code="b">txt</subfield>
+  </datafield>
+  <datafield tag="002D">
+    <subfield code="a">ohne Hilfsmittel zu benutzen</subfield>
+    <subfield code="b">n</subfield>
+  </datafield>
+  <datafield tag="002E">
+    <subfield code="a">Band</subfield>
+    <subfield code="b">nc</subfield>
+  </datafield>
+  <datafield tag="003@">
+    <subfield code="0">1769930981</subfield>
+  </datafield>
+  <datafield tag="003O">
+    <subfield code="a">OCoLC</subfield>
+    <subfield code="0">1267586994</subfield>
+  </datafield>
+  <datafield tag="004A">
+    <subfield code="0">9780141439518</subfield>
+  </datafield>
+  <datafield tag="007G">
+    <subfield code="i">KXP</subfield>
+    <subfield code="0">1769930981</subfield>
+  </datafield>
+  <datafield tag="010@">
+    <subfield code="a">eng</subfield>
+  </datafield>
+  <datafield tag="010E">
+    <subfield code="e">rda</subfield>
+  </datafield>
+  <datafield tag="011@">
+    <subfield code="a">2014</subfield>
+  </datafield>
+  <datafield tag="019@">
+    <subfield code="a">XA-GB</subfield>
+    <subfield code="a">XD-US</subfield>
+    <subfield code="a">XD-CA</subfield>
+    <subfield code="a">XA-IE</subfield>
+    <subfield code="a">XE-AU</subfield>
+    <subfield code="a">XB-IN</subfield>
+    <subfield code="a">XE-NZ</subfield>
+    <subfield code="a">XC-ZA</subfield>
+  </datafield>
+  <datafield tag="021A">
+    <subfield code="a">Pride and prejudice</subfield>
+    <subfield code="h">Jane Austen ; edited with an introduction and notes by Vivien Jones</subfield>
+  </datafield>
+  <datafield tag="028A">
+    <subfield code="9">133418049</subfield>
+    <subfield code="V">Tpv1</subfield>
+    <subfield code="7">gnd/118505173</subfield>
+    <subfield code="3">160126061</subfield>
+    <subfield code="w">piz</subfield>
+    <subfield code="A">Austen</subfield>
+    <subfield code="D">Jane</subfield>
+    <subfield code="E">1775</subfield>
+    <subfield code="M">1817</subfield>
+    <subfield code="B">VerfasserIn</subfield>
+    <subfield code="4">aut</subfield>
+  </datafield>
+  <datafield tag="028C">
+    <subfield code="9">703086081</subfield>
+    <subfield code="V">Tpv3</subfield>
+    <subfield code="7">gnd/138732485</subfield>
+    <subfield code="3">161608906</subfield>
+    <subfield code="w">piz</subfield>
+    <subfield code="A">Jones</subfield>
+    <subfield code="D">Vivien</subfield>
+    <subfield code="E">1952</subfield>
+    <subfield code="B">HerausgeberIn</subfield>
+    <subfield code="4">edt</subfield>
+    <subfield code="B">VerfasserIn einer Einleitung</subfield>
+    <subfield code="4">win</subfield>
+  </datafield>
+  <datafield tag="032@">
+    <subfield code="a">Revised edition</subfield>
+  </datafield>
+  <datafield tag="033A">
+    <subfield code="p">London</subfield>
+    <subfield code="p">New York</subfield>
+    <subfield code="p">Toronto</subfield>
+    <subfield code="p">Dublin</subfield>
+    <subfield code="p">Melbourne</subfield>
+    <subfield code="p">New Delhi</subfield>
+    <subfield code="p">Auckland</subfield>
+    <subfield code="p">Johannesburg</subfield>
+    <subfield code="n">Penguin Books</subfield>
+  </datafield>
+  <datafield tag="034D">
+    <subfield code="a">xl, 400 Seiten</subfield>
+  </datafield>
+  <datafield tag="034I">
+    <subfield code="a">20 cm</subfield>
+  </datafield>
+  <datafield tag="036E">
+    <subfield code="a">Penguin classics</subfield>
+  </datafield>
+  <datafield tag="037A">
+    <subfield code="a">Literaturverzeichnis: Seite xxxv-xxxvii</subfield>
+  </datafield>
+  <datafield tag="045A">
+    <subfield code="a">PR4034</subfield>
+  </datafield>
+  <datafield tag="045F">
+    <subfield code="e">22</subfield>
+    <subfield code="a">823/.7</subfield>
+    <subfield code="u">https://www.gbv.de/dms/ddc/823.7.pdf</subfield>
+    <subfield code="A">LOC</subfield>
+  </datafield>
+  <datafield tag="045F">
+    <subfield code="a">823.7</subfield>
+    <subfield code="u">https://www.gbv.de/dms/ddc/823.7.pdf</subfield>
+    <subfield code="A">OCLC</subfield>
+  </datafield>
+  <datafield tag="045Q" occurrence="01">
+    <subfield code="9">10640539X</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="a">18.05</subfield>
+    <subfield code="j">Englische Literatur</subfield>
+  </datafield>
+  <datafield tag="045Q" occurrence="01">
+    <subfield code="9">181571714</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="a">17.97</subfield>
+    <subfield code="j">Texte eines einzelnen Autors</subfield>
+  </datafield>
+  <datafield tag="045R">
+    <subfield code="9">1272037754</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="7">rvk/50476:11850</subfield>
+    <subfield code="3">202037754</subfield>
+    <subfield code="a">HL 1683</subfield>
+    <subfield code="j">Einzelausgaben</subfield>
+    <subfield code="N">H</subfield>
+    <subfield code="J">Anglistik. Amerikanistik</subfield>
+    <subfield code="N">HG-HO</subfield>
+    <subfield code="J">Englische Literatur</subfield>
+    <subfield code="N">HL</subfield>
+    <subfield code="J">19. Jahrhundert (1770/1800-1890/1900)</subfield>
+    <subfield code="N">HL 1070-HL 4990</subfield>
+    <subfield code="J">Literaturgeschichte</subfield>
+    <subfield code="N">HL 1600-HL 4955</subfield>
+    <subfield code="J">Einzelne Autoren</subfield>
+    <subfield code="N">HL 1600-HL 1705</subfield>
+    <subfield code="J">Autoren A</subfield>
+    <subfield code="N">HL 1680-HL 1685</subfield>
+    <subfield code="J">Austen, Jane</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">100</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="101B">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="t">11:39:30.000</subfield>
+  </datafield>
+  <datafield tag="101U">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="102D">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="b">3760</subfield>
+    <subfield code="a">3100</subfield>
+  </datafield>
+  <datafield tag="145Z">
+    <subfield code="a">F/R 820.1 Aust</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">20-07-21</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="t">11:39:30.000</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="202D" occurrence="01">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="b">3760</subfield>
+    <subfield code="a">3100</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">3956253426</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">09-09-21</subfield>
+    <subfield code="b">k</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="f">FH</subfield>
+    <subfield code="a">2021.01975:1</subfield>
+    <subfield code="d">u</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209G" occurrence="01">
+    <subfield code="a">MA9$00726996X</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="02">
+    <subfield code="0">09-09-21</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="02">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="t">11:39:30.000</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="02">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="202D" occurrence="02">
+    <subfield code="0">09-09-21</subfield>
+    <subfield code="b">3760</subfield>
+    <subfield code="a">3100</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="02">
+    <subfield code="0">3975777699</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="02">
+    <subfield code="a">09-09-21</subfield>
+    <subfield code="b">k</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="02">
+    <subfield code="f">FH</subfield>
+    <subfield code="a">2021.01975:2</subfield>
+    <subfield code="d">u</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209G" occurrence="02">
+    <subfield code="a">MA9$007269986</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">2044</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">10-07-23</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">10-07-23</subfield>
+    <subfield code="t">13:20:38.000</subfield>
+  </datafield>
+  <datafield tag="201D" occurrence="01">
+    <subfield code="0">KAPH:10-07-23</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">4351787562</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">10-07-23</subfield>
+    <subfield code="b">l01</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="B">751</subfield>
+    <subfield code="J">l</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209B" occurrence="01">
+    <subfield code="a">adis</subfield>
+    <subfield code="x">12</subfield>
+  </datafield>
+</record></zs:recordData><zs:recordPosition>1</zs:recordPosition></zs:record><zs:record><zs:recordSchema>picaxml</zs:recordSchema><zs:recordPacking>xml</zs:recordPacking><zs:recordData><record xmlns="info:srw/schema/5/picaXML-v1.0">
+  <datafield tag="001@">
+    <subfield code="0">22,24,100,390,2005,2010,2012,2030</subfield>
+  </datafield>
+  <datafield tag="001A">
+    <subfield code="0">2002:06-11-02</subfield>
+  </datafield>
+  <datafield tag="001B">
+    <subfield code="0">BSZ:11-06-26</subfield>
+    <subfield code="t">22:49:57.000</subfield>
+  </datafield>
+  <datafield tag="001D">
+    <subfield code="0">3100:04-07-03</subfield>
+  </datafield>
+  <datafield tag="001U">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="001X">
+    <subfield code="0">0</subfield>
+  </datafield>
+  <datafield tag="002@">
+    <subfield code="0">Aau</subfield>
+  </datafield>
+  <datafield tag="002C">
+    <subfield code="a">Text</subfield>
+    <subfield code="b">txt</subfield>
+  </datafield>
+  <datafield tag="002D">
+    <subfield code="a">ohne Hilfsmittel zu benutzen</subfield>
+    <subfield code="b">n</subfield>
+  </datafield>
+  <datafield tag="002E">
+    <subfield code="a">Band</subfield>
+    <subfield code="b">nc</subfield>
+  </datafield>
+  <datafield tag="003@">
+    <subfield code="0">35612407X</subfield>
+  </datafield>
+  <datafield tag="003H">
+    <subfield code="0">111464692</subfield>
+  </datafield>
+  <datafield tag="003O">
+    <subfield code="a">OCoLC</subfield>
+    <subfield code="0">1532604713</subfield>
+    <subfield code="v">2026-04-17</subfield>
+  </datafield>
+  <datafield tag="003S">
+    <subfield code="0">263680681</subfield>
+  </datafield>
+  <datafield tag="003T">
+    <subfield code="a">OCoLC</subfield>
+    <subfield code="0">51033055</subfield>
+  </datafield>
+  <datafield tag="003T">
+    <subfield code="a">OCoLC</subfield>
+    <subfield code="0">223451760</subfield>
+  </datafield>
+  <datafield tag="003T">
+    <subfield code="a">OCoLC</subfield>
+    <subfield code="0">248765107</subfield>
+    <subfield code="v">2012-12-31</subfield>
+  </datafield>
+  <datafield tag="004A">
+    <subfield code="0">9780141439518</subfield>
+  </datafield>
+  <datafield tag="004A">
+    <subfield code="0">0141439513</subfield>
+  </datafield>
+  <datafield tag="004A">
+    <subfield code="0">9780141028101</subfield>
+    <subfield code="f">pbk.: EUR 9.95</subfield>
+  </datafield>
+  <datafield tag="006A">
+    <subfield code="0">2003265779</subfield>
+  </datafield>
+  <datafield tag="006B">
+    <subfield code="0">bA277118</subfield>
+  </datafield>
+  <datafield tag="006B">
+    <subfield code="0">0141439513</subfield>
+  </datafield>
+  <datafield tag="006B">
+    <subfield code="0">GBA277118</subfield>
+  </datafield>
+  <datafield tag="006X">
+    <subfield code="i">OCoLC</subfield>
+    <subfield code="0">ocm51033055</subfield>
+  </datafield>
+  <datafield tag="006X">
+    <subfield code="i">JUB</subfield>
+    <subfield code="0">b10133872</subfield>
+  </datafield>
+  <datafield tag="006Y">
+    <subfield code="0">STBHANTALT0141439513</subfield>
+  </datafield>
+  <datafield tag="007G">
+    <subfield code="i">GBV</subfield>
+    <subfield code="0">35612407X</subfield>
+  </datafield>
+  <datafield tag="007H">
+    <subfield code="i">HEB</subfield>
+    <subfield code="0">111464692</subfield>
+  </datafield>
+  <datafield tag="009@">
+    <subfield code="b">Blocktest</subfield>
+  </datafield>
+  <datafield tag="010@">
+    <subfield code="a">eng</subfield>
+  </datafield>
+  <datafield tag="011@">
+    <subfield code="a">2003</subfield>
+    <subfield code="n">2003</subfield>
+  </datafield>
+  <datafield tag="017G">
+    <subfield code="S">0</subfield>
+    <subfield code="u">http://www.gbv.de/dms/faz-rez/F18200303181796035.pdf</subfield>
+    <subfield code="m">V:DE-601</subfield>
+    <subfield code="m">X:FAZ</subfield>
+    <subfield code="q">pdf/application</subfield>
+    <subfield code="v">2009-04-30</subfield>
+    <subfield code="x">H</subfield>
+    <subfield code="y">Rezension</subfield>
+    <subfield code="3">Rezension</subfield>
+    <subfield code="5">07</subfield>
+    <subfield code="A">GBV</subfield>
+    <subfield code="B">2</subfield>
+  </datafield>
+  <datafield tag="017G">
+    <subfield code="u">http://www.loc.gov/catdir/enhancements/fy0716/2003265779-b.html</subfield>
+    <subfield code="x">H</subfield>
+    <subfield code="3">Autorenbiografie</subfield>
+    <subfield code="5">13</subfield>
+    <subfield code="A">LOC</subfield>
+  </datafield>
+  <datafield tag="017G">
+    <subfield code="u">http://www.loc.gov/catdir/enhancements/fy0716/2003265779-d.html</subfield>
+    <subfield code="x">H</subfield>
+    <subfield code="3">80</subfield>
+    <subfield code="A">LOC</subfield>
+  </datafield>
+  <datafield tag="017G">
+    <subfield code="u">http://www.loc.gov/catdir/enhancements/fy1204/2003265779-s.html</subfield>
+    <subfield code="x">H</subfield>
+    <subfield code="3">Auszug</subfield>
+    <subfield code="5">23</subfield>
+    <subfield code="A">LOC</subfield>
+  </datafield>
+  <datafield tag="019@">
+    <subfield code="a">XA-GB</subfield>
+    <subfield code="a">XD-US</subfield>
+    <subfield code="a">XE-AU</subfield>
+  </datafield>
+  <datafield tag="021A">
+    <subfield code="a">Pride and prejudice</subfield>
+    <subfield code="h">Jane Austen. Ed. with an introd. and notes by Vivien Jones. With the original Penguin classics introduction by Tony Tanner</subfield>
+  </datafield>
+  <datafield tag="028A">
+    <subfield code="9">133418049</subfield>
+    <subfield code="V">Tpv1</subfield>
+    <subfield code="7">gnd/118505173</subfield>
+    <subfield code="3">160126061</subfield>
+    <subfield code="w">piz</subfield>
+    <subfield code="A">Austen</subfield>
+    <subfield code="D">Jane</subfield>
+    <subfield code="E">1775</subfield>
+    <subfield code="M">1817</subfield>
+  </datafield>
+  <datafield tag="028C">
+    <subfield code="9">703086081</subfield>
+    <subfield code="V">Tpv3</subfield>
+    <subfield code="7">gnd/138732485</subfield>
+    <subfield code="3">161608906</subfield>
+    <subfield code="w">piz</subfield>
+    <subfield code="A">Jones</subfield>
+    <subfield code="D">Vivien</subfield>
+    <subfield code="E">1952</subfield>
+    <subfield code="B">Hrsg.</subfield>
+  </datafield>
+  <datafield tag="028C">
+    <subfield code="9">08251867X</subfield>
+    <subfield code="V">Tpv1</subfield>
+    <subfield code="7">gnd/123376874</subfield>
+    <subfield code="3">163268568</subfield>
+    <subfield code="w">piz</subfield>
+    <subfield code="A">Tanner</subfield>
+    <subfield code="D">Tony</subfield>
+    <subfield code="E">1935</subfield>
+    <subfield code="M">1998</subfield>
+  </datafield>
+  <datafield tag="032@">
+    <subfield code="a">reissued with new chronology, updated further reading and 1972 Penguin classics introduction by Tony Tanner</subfield>
+  </datafield>
+  <datafield tag="033A">
+    <subfield code="p">London</subfield>
+    <subfield code="p">New York</subfield>
+    <subfield code="p">Victoria</subfield>
+    <subfield code="p">Toronto</subfield>
+    <subfield code="p">New Delhi</subfield>
+    <subfield code="p">Auckland</subfield>
+    <subfield code="p">Rosebank</subfield>
+    <subfield code="n">Penguin Books</subfield>
+  </datafield>
+  <datafield tag="034D">
+    <subfield code="a">XLII, 435 S</subfield>
+  </datafield>
+  <datafield tag="034I">
+    <subfield code="a">20 cm</subfield>
+  </datafield>
+  <datafield tag="036E">
+    <subfield code="a">Penguin classics</subfield>
+  </datafield>
+  <datafield tag="037A">
+    <subfield code="a">This ed. reissued with new chronology, updated further reading</subfield>
+  </datafield>
+  <datafield tag="045A">
+    <subfield code="a">PR4034</subfield>
+  </datafield>
+  <datafield tag="045F">
+    <subfield code="e">22</subfield>
+    <subfield code="a">823/.7</subfield>
+    <subfield code="u">https://www.gbv.de/dms/ddc/823.7.pdf</subfield>
+    <subfield code="A">LOC</subfield>
+  </datafield>
+  <datafield tag="045F">
+    <subfield code="a">823.7</subfield>
+    <subfield code="u">https://www.gbv.de/dms/ddc/823.7.pdf</subfield>
+    <subfield code="A">OCLC</subfield>
+  </datafield>
+  <datafield tag="045Q" occurrence="01">
+    <subfield code="9">10640539X</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="a">18.05</subfield>
+    <subfield code="j">Englische Literatur</subfield>
+  </datafield>
+  <datafield tag="045Q" occurrence="01">
+    <subfield code="9">181571714</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="a">17.97</subfield>
+    <subfield code="j">Texte eines einzelnen Autors</subfield>
+  </datafield>
+  <datafield tag="045R">
+    <subfield code="9">1272037754</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="7">rvk/50476:11850</subfield>
+    <subfield code="3">202037754</subfield>
+    <subfield code="a">HL 1683</subfield>
+    <subfield code="j">Einzelausgaben</subfield>
+    <subfield code="N">H</subfield>
+    <subfield code="J">Anglistik. Amerikanistik</subfield>
+    <subfield code="N">HG-HO</subfield>
+    <subfield code="J">Englische Literatur</subfield>
+    <subfield code="N">HL</subfield>
+    <subfield code="J">19. Jahrhundert (1770/1800-1890/1900)</subfield>
+    <subfield code="N">HL 1070-HL 4990</subfield>
+    <subfield code="J">Literaturgeschichte</subfield>
+    <subfield code="N">HL 1600-HL 4955</subfield>
+    <subfield code="J">Einzelne Autoren</subfield>
+    <subfield code="N">HL 1600-HL 1705</subfield>
+    <subfield code="J">Autoren A</subfield>
+    <subfield code="N">HL 1680-HL 1685</subfield>
+    <subfield code="J">Austen, Jane</subfield>
+  </datafield>
+  <datafield tag="045R">
+    <subfield code="9">1270709054</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="7">rvk/50476:11847</subfield>
+    <subfield code="3">200709054</subfield>
+    <subfield code="a">HL 1680</subfield>
+    <subfield code="j">Gesamtausgaben</subfield>
+    <subfield code="N">H</subfield>
+    <subfield code="J">Anglistik. Amerikanistik</subfield>
+    <subfield code="N">HG-HO</subfield>
+    <subfield code="J">Englische Literatur</subfield>
+    <subfield code="N">HL</subfield>
+    <subfield code="J">19. Jahrhundert (1770/1800-1890/1900)</subfield>
+    <subfield code="N">HL 1070-HL 4990</subfield>
+    <subfield code="J">Literaturgeschichte</subfield>
+    <subfield code="N">HL 1600-HL 4955</subfield>
+    <subfield code="J">Einzelne Autoren</subfield>
+    <subfield code="N">HL 1600-HL 1705</subfield>
+    <subfield code="J">Autoren A</subfield>
+    <subfield code="N">HL 1680-HL 1685</subfield>
+    <subfield code="J">Austen, Jane</subfield>
+  </datafield>
+  <datafield tag="045R">
+    <subfield code="9">1270823043</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="7">rvk/51630:</subfield>
+    <subfield code="3">200823043</subfield>
+    <subfield code="a">HN 9990</subfield>
+    <subfield code="j">Sonstige</subfield>
+    <subfield code="N">H</subfield>
+    <subfield code="J">Anglistik. Amerikanistik</subfield>
+    <subfield code="N">HG-HO</subfield>
+    <subfield code="J">Englische Literatur</subfield>
+    <subfield code="N">HN</subfield>
+    <subfield code="J">Die Literatur des 20. Jahrhunderts seit 1945</subfield>
+    <subfield code="N">HN 1070-HN 9990</subfield>
+    <subfield code="J">Literaturgeschichte</subfield>
+  </datafield>
+  <datafield tag="045R">
+    <subfield code="9">1270709062</subfield>
+    <subfield code="V">Tkv</subfield>
+    <subfield code="7">rvk/50476:11848</subfield>
+    <subfield code="3">200709062</subfield>
+    <subfield code="a">HL 1681</subfield>
+    <subfield code="j">Teilsammlungen</subfield>
+    <subfield code="N">H</subfield>
+    <subfield code="J">Anglistik. Amerikanistik</subfield>
+    <subfield code="N">HG-HO</subfield>
+    <subfield code="J">Englische Literatur</subfield>
+    <subfield code="N">HL</subfield>
+    <subfield code="J">19. Jahrhundert (1770/1800-1890/1900)</subfield>
+    <subfield code="N">HL 1070-HL 4990</subfield>
+    <subfield code="J">Literaturgeschichte</subfield>
+    <subfield code="N">HL 1600-HL 4955</subfield>
+    <subfield code="J">Einzelne Autoren</subfield>
+    <subfield code="N">HL 1600-HL 1705</subfield>
+    <subfield code="J">Autoren A</subfield>
+    <subfield code="N">HL 1680-HL 1685</subfield>
+    <subfield code="J">Austen, Jane</subfield>
+  </datafield>
+  <datafield tag="045X">
+    <subfield code="i">mzub</subfield>
+    <subfield code="a">h100</subfield>
+    <subfield code="j">Anglistik, Amerikanistik</subfield>
+  </datafield>
+  <datafield tag="046K">
+    <subfield code="a">pbk. -  : £3.99</subfield>
+  </datafield>
+  <datafield tag="046M">
+    <subfield code="u">Literaturverz. S. [409] - 435</subfield>
+  </datafield>
+  <datafield tag="046M">
+    <subfield code="u">Literaturverzeichnis:  Seite [xxxvii] - xxxix</subfield>
+  </datafield>
+  <datafield tag="046X">
+    <subfield code="a">eb</subfield>
+    <subfield code="c">20200919</subfield>
+    <subfield code="f">DE-640</subfield>
+    <subfield code="z">1</subfield>
+  </datafield>
+  <datafield tag="047A">
+    <subfield code="a">HL 1683:L1UB</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">22</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">27-11-20</subfield>
+    <subfield code="t">17:05:28.000</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="202D" occurrence="01">
+    <subfield code="0">27-11-20</subfield>
+    <subfield code="b">6900</subfield>
+    <subfield code="a">0018</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">754125149</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">03-04-06</subfield>
+    <subfield code="b">zu</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="f">SUB</subfield>
+    <subfield code="a">A 2006/3156</subfield>
+    <subfield code="d">u</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209G" occurrence="01">
+    <subfield code="a">934025214</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">24</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">08-03-23</subfield>
+    <subfield code="t">22:43:29.000</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="202D" occurrence="01">
+    <subfield code="0">08-03-23</subfield>
+    <subfield code="b">corr_209A</subfield>
+    <subfield code="a">1999</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">1170558712</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">20-07-10</subfield>
+    <subfield code="b">zf055</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="f">8/55</subfield>
+    <subfield code="a">19 | AUS | Pri</subfield>
+    <subfield code="d">i</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="a">Bibliothekszimmer</subfield>
+    <subfield code="x">04</subfield>
+  </datafield>
+  <datafield tag="209B" occurrence="01">
+    <subfield code="a">acq</subfield>
+    <subfield code="x">50</subfield>
+  </datafield>
+  <datafield tag="209C" occurrence="01">
+    <subfield code="a">74186</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209O" occurrence="01">
+    <subfield code="a">go</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="220B" occurrence="01">
+    <subfield code="a">fb55:2010-07-20</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">390</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">26-08-25</subfield>
+    <subfield code="t">19:18:03.000</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="202D" occurrence="01">
+    <subfield code="0">26-08-25</subfield>
+    <subfield code="b">r1935</subfield>
+    <subfield code="a">1999</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">1806374927</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">31-10-11</subfield>
+    <subfield code="b">n</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="a">PR4034 .P7 2003</subfield>
+    <subfield code="d">u</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209G" occurrence="01">
+    <subfield code="a">31111000084622</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">2005</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">16-04-07</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">16-04-07</subfield>
+    <subfield code="t">10:57:53.000</subfield>
+  </datafield>
+  <datafield tag="201D" occurrence="01">
+    <subfield code="0">SBU309:16-04-07</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">310702399X</subfield>
+  </datafield>
+  <datafield tag="203S" occurrence="01">
+    <subfield code="0">531556859</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">16-04-07</subfield>
+    <subfield code="b">l01</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="B">291/309</subfield>
+    <subfield code="a">xix AUS 336 69</subfield>
+    <subfield code="D">p</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209C" occurrence="01">
+    <subfield code="a">40563</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="220B" occurrence="01">
+    <subfield code="a">eh</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">2010</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">02-11-07</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">02-11-07</subfield>
+    <subfield code="t">09:31:09.000</subfield>
+  </datafield>
+  <datafield tag="201D" occurrence="01">
+    <subfield code="0">L1UB:02-11-07</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">3107024066</subfield>
+  </datafield>
+  <datafield tag="203S" occurrence="01">
+    <subfield code="0">554754738</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">02-11-07</subfield>
+    <subfield code="b">l01</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="B">15</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="220B" occurrence="01">
+    <subfield code="a">AE</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">2012</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">26-04-19</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">02-05-19</subfield>
+    <subfield code="t">13:40:19.000</subfield>
+  </datafield>
+  <datafield tag="201D" occurrence="01">
+    <subfield code="0">HDBSEN:26-04-19</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">3453576918</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">26-04-19</subfield>
+    <subfield code="b">l01</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="B">16/24</subfield>
+    <subfield code="a">L AUS 193</subfield>
+    <subfield code="D">p</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209C" occurrence="01">
+    <subfield code="a">EN-1900313</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209G" occurrence="01">
+    <subfield code="a">604974902</subfield>
+  </datafield>
+  <datafield tag="237A" occurrence="01">
+    <subfield code="a">Revised edition 2014</subfield>
+  </datafield>
+  <datafield tag="245H" occurrence="01">
+    <subfield code="a">52</subfield>
+  </datafield>
+  <datafield tag="101@">
+    <subfield code="a">2030</subfield>
+    <subfield code="c">PICA</subfield>
+  </datafield>
+  <datafield tag="201A" occurrence="01">
+    <subfield code="0">06-02-26</subfield>
+  </datafield>
+  <datafield tag="201B" occurrence="01">
+    <subfield code="0">06-02-26</subfield>
+    <subfield code="t">19:53:51.000</subfield>
+  </datafield>
+  <datafield tag="201D" occurrence="01">
+    <subfield code="0">MZU004:23-03-23</subfield>
+  </datafield>
+  <datafield tag="201U" occurrence="01">
+    <subfield code="0">utf8</subfield>
+  </datafield>
+  <datafield tag="203@" occurrence="01">
+    <subfield code="0">4891269782</subfield>
+  </datafield>
+  <datafield tag="203H" occurrence="01">
+    <subfield code="0">1229868763</subfield>
+  </datafield>
+  <datafield tag="206X" occurrence="01">
+    <subfield code="0">HEB1229868763</subfield>
+  </datafield>
+  <datafield tag="208@" occurrence="01">
+    <subfield code="a">23-03-23</subfield>
+    <subfield code="b">l01</subfield>
+  </datafield>
+  <datafield tag="209A" occurrence="01">
+    <subfield code="B">77/004</subfield>
+    <subfield code="f">Standort Anglistik/Amerikanistik</subfield>
+    <subfield code="a">Anglistik R A 4 XL</subfield>
+    <subfield code="J">n</subfield>
+    <subfield code="x">00</subfield>
+  </datafield>
+  <datafield tag="209B" occurrence="01">
+    <subfield code="a">konv</subfield>
+    <subfield code="x">12</subfield>
+  </datafield>
+  <datafield tag="209B" occurrence="01">
+    <subfield code="a">zi</subfield>
+    <subfield code="x">13</subfield>
+  </datafield>
+</record></zs:recordData><zs:recordPosition>2</zs:recordPosition></zs:record></zs:records><zs:echoedSearchRetrieveRequest><zs:version>1.1</zs:version><zs:query>pica.isb=9780141439518</zs:query><zs:maximumRecords>2</zs:maximumRecords><zs:recordPacking>xml</zs:recordPacking><zs:recordSchema>picaxml</zs:recordSchema></zs:echoedSearchRetrieveRequest></zs:searchRetrieveResponse>

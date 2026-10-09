@@ -71,5 +71,10 @@
     "url": "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140328721",
     "status": 429,
     "note": "synthetic shape-faithful quota-exhaustion body (a real 429 cannot be triggered politely on demand)."
+  },
+  "k10plus_pica": {
+    "url": "https://sru.k10plus.de/gvk?operation=searchRetrieve&version=1.1&query=pica.isb%3D9780141439518&maximumRecords=2&recordSchema=picaxml",
+    "status": 200,
+    "note": "real response 2026-10-09, fetched IPv4 from lab; only the 12 subject-heading 044A datafields of record 1 dropped; holding codes = 209A $B (751, 291/309, 15, 16/24, 77/004), PPN = 003@ $0"
   }
 }

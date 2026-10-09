@@ -712,6 +712,26 @@ def cmd_custody_report(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------- M8: union
+def cmd_union_holdings_report(args) -> int:
+    from . import m4, m5
+
+    conn = m4.connect(args.db)
+    try:
+        stats = m5.union_holdings_report(conn, args.institution)
+    finally:
+        conn.close()
+    d = stats["deltas"]
+    print(f"union-holdings-report: {stats['institution']} holds "
+          f"{stats['books_with_union_holding']:,} workset book(s) "
+          f"({stats['with_library_detail']:,} with per-library detail) -> "
+          f"wild->single={d['wild_to_single']:,}, "
+          f"single->multi={d['single_to_multi']:,}, "
+          f"already-multi={d['already_multi']:,}; "
+          f"rescued={stats['rescued_total']:,}")
+    return 0
+
+
 # ------------------------------------------------------------- M6: rescue
 def cmd_fetch_gutenberg(args) -> int:
     from . import m6
@@ -1011,12 +1031,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser(
         "enrich-holdings",
-        help="stage B (M5.7): SRU top-up per institution (dnb/ndl/bnf/loc), "
+        help="stage B (M5.7/M8): SRU top-up per institution "
+             "(dnb/ndl/bnf/loc + k10plus GVK union catalog), "
              "workset ISBNs with no holdings row yet; <=2 rps, IPv4-forced, "
              "budget-capped, resumable; loc uses plain http://lx2:210 (TLS "
              "broken on that port)")
     sp.add_argument("--institution", required=True,
-                    choices=["dnb", "ndl", "bnf", "loc"])
+                    choices=["dnb", "ndl", "bnf", "loc", "k10plus"])
     sp.add_argument("--budget", type=int, default=1000,
                     help="max SRU requests this run")
     sp.set_defaults(fn=cmd_enrich_holdings)
@@ -1033,6 +1054,17 @@ def build_parser() -> argparse.ArgumentParser:
              "(restricted OR single-institution CR), wild (no holdings), "
              "captive-secure (multi-institution CR) — no status-rule changes")
     sp.set_defaults(fn=cmd_custody_report)
+
+    sp = sub.add_parser(
+        "union-holdings-report",
+        help="M8: custody_physical deltas attributable to a union-catalog "
+             "holdings source (k10plus GVK) — wild->single rescues by "
+             "academic/state libraries, single->multi upgrades")
+    sp.add_argument("--institution", default="k10plus",
+                    choices=["k10plus"],
+                    help="union-catalog holdings source (SUDOC folds in "
+                         "later, same pattern)")
+    sp.set_defaults(fn=cmd_union_holdings_report)
 
     sp = sub.add_parser(
         "fetch-gutenberg",
