@@ -26,6 +26,8 @@ scanner-english-set = "lastcopy.m7_scanner:main_english_set"
 scanner-calibration = "lastcopy.m7_scanner:main_calibration"
 lobid-join = "lastcopy.m8_lobid:main"
 lobid-import = "lastcopy.m8_lobid:main_import"
+ukhub-join = "lastcopy.m8_ukhub:main"
+ukhub-import = "lastcopy.m8_ukhub:main_import"
 
 [tool.setuptools.packages.find]
 include = ["lastcopy*"]

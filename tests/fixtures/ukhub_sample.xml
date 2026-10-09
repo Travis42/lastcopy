@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- REAL excerpt: Jisc Library Hub Discover Z39.50 (tcp:3.250.189.53:210),
+     find @attr 1=7 9780141439518 (Pride and prejudice, Penguin 2003),
+     `format xml` presentation, record 1 of 8 (hit 1011169925), captured
+     live via yaz-client 2026-10-09 ~21:25 UTC.  Subjects/names trimmed;
+     structure, namespaces and COPAC holdings extension untouched. -->
+<mods version="3.7" xmlns="http://www.loc.gov/mods/v3" xmlns:h="http://copac.ac.uk/schemas/holdings/v1" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<recordInfo>
+		<recordIdentifier source="UkMaC">1011169925</recordIdentifier>
+		<recordCreationDate encoding="iso8601">20261009</recordCreationDate>
+	</recordInfo>
+	<typeOfResource>text</typeOfResource>
+	<originInfo>
+		<dateIssued encoding="marc">2003</dateIssued>
+		<place>
+			<placeTerm authority="marccountry" type="code">enk</placeTerm>
+		</place>
+	</originInfo>
+	<identifier type="isbn">9780141439518 (pbk.)</identifier>
+	<titleInfo>
+		<title>Pride and prejudice</title>
+	</titleInfo>
+	<extension>
+		<modsCollection>
+			<mods version="3.7">
+				<recordInfo>
+					<recordIdentifier source="UkMaC">1011169925</recordIdentifier>
+					<recordIdentifier source="NiBfQU">991008756726508046</recordIdentifier>
+				</recordInfo>
+				<identifier type="isbn">9780141439518 (pbk.)</identifier>
+				<titleInfo>
+					<title>Pride and prejudice</title>
+				</titleInfo>
+				<language>
+					<languageTerm authority="iso639-2b" type="code">eng</languageTerm>
+				</language>
+				<location>
+					<physicalLocation>The Queen's University of Belfast</physicalLocation>
+					<physicalLocation authority="UkMaC">qub</physicalLocation>
+					<holdingSimple>
+						<copyInformation>
+							<subLocation>McClay Library</subLocation>
+							<shelfLocator>PR4034.P9 LNI/ JONE</shelfLocator>
+						</copyInformation>
+					</holdingSimple>
+				</location>
+			</mods>
+		</modsCollection>
+	</extension>
+</mods>

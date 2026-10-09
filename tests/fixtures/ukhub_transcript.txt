@@ -1,0 +1,95 @@
+Z> Connecting...OK.
+Sent initrequest.
+Connection accepted by v3 target.
+ID     : 120/81
+Name   : ess <help@jisc.ac.uk>/GFS/YAZ
+Version: 5.34.0 dec0c8a0b762132468cc8264c1b220eae1c67bd7
+Options: search triggerResourceCtrl sort namedResultSets
+Elapsed: 0.048848
+Z> Sent searchRequest.
+Received SearchResponse.
+Search was a success.
+Number of hits: 3, setno 1
+records returned: 0
+Elapsed: 1.788329
+Z> Sent presentRequest (1+3).
+Records: 3
+[1]Record type: XML
+<mods version="3.7" xmlns="http://www.loc.gov/mods/v3">
+	<recordInfo>
+		<recordIdentifier source="UkMaC">1011169925</recordIdentifier>
+	</recordInfo>
+	<identifier type="isbn">9780141439518 (pbk.)</identifier>
+	<titleInfo>
+		<title>Pride and prejudice</title>
+	</titleInfo>
+	<extension>
+		<modsCollection>
+			<mods version="3.7">
+				<recordInfo>
+					<recordIdentifier source="UkMaC">1011169925</recordIdentifier>
+				</recordInfo>
+				<location>
+					<physicalLocation>The Queen's University of Belfast</physicalLocation>
+					<physicalLocation authority="UkMaC">qub</physicalLocation>
+				</location>
+			</mods>
+		</modsCollection>
+	</extension>
+</mods>
+[2]Record type: XML
+<mods version="3.7" xmlns="http://www.loc.gov/mods/v3">
+	<recordInfo>
+		<recordIdentifier source="UkMaC">135573087</recordIdentifier>
+	</recordInfo>
+	<identifier type="isbn">9780141439518</identifier>
+	<extension>
+		<modsCollection>
+			<mods version="3.7">
+				<location>
+					<physicalLocation>University of Cambridge</physicalLocation>
+					<physicalLocation authority="UkMaC">cam</physicalLocation>
+				</location>
+			</mods>
+		</modsCollection>
+	</extension>
+</mods>
+[3]Record type: XML
+<mods version="3.7" xmlns="http://www.loc.gov/mods/v3">
+	<recordInfo>
+		<recordIdentifier source="UkMaC">1050553226</recordIdentifier>
+	</recordInfo>
+	<extension>
+		<modsCollection>
+			<mods version="3.7">
+				<location>
+					<physicalLocation>National Library of Scotland</physicalLocation>
+					<physicalLocation authority="UkMaC">nls</physicalLocation>
+				</location>
+			</mods>
+		</modsCollection>
+	</extension>
+</mods>
+nextResultSetPosition = 4
+Elapsed: 0.312452
+Z> Sent searchRequest.
+Received SearchResponse.
+Search was a success.
+Number of hits: 0, setno 1
+records returned: 0
+Elapsed: 1.656540
+Z> Sent presentRequest (1+3).
+nextResultSetPosition = 1
+Elapsed: 0.027232
+Z> Sent searchRequest.
+Received SearchResponse.
+Search was a success.
+Number of hits: 2, setno 1
+records returned: 0
+Elapsed: 1.610243
+Z> Sent presentRequest (1+2).
+Diagnostic message(s) from database:
+    [238] Record not available in requested syntax -- v2 addinfo 'try XML instead'
+nextResultSetPosition = 3
+Elapsed: 0.027540
+Z> See you later, alligator.

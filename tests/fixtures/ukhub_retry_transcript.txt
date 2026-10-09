@@ -1,0 +1,34 @@
+Z> Connecting...OK.
+Sent initrequest.
+Connection accepted by v3 target.
+ID     : 120/81
+Name   : ess <help@jisc.ac.uk>/GFS/YAZ
+Version: 5.34.0 dec0c8a0b762132468cc8264c1b220eae1c67bd7
+Options: search triggerResourceCtrl sort namedResultSets
+Elapsed: 0.050240
+Z> Sent searchRequest.
+Received SearchResponse.
+Search was a success.
+Number of hits: 1, setno 1
+records returned: 0
+Elapsed: 1.702411
+Z> Sent presentRequest (1+1).
+Records: 1
+[1]Record type: XML
+<mods version="3.7" xmlns="http://www.loc.gov/mods/v3">
+	<recordInfo>
+		<recordIdentifier source="UkMaC">853686737</recordIdentifier>
+	</recordInfo>
+	<extension>
+		<modsCollection>
+			<mods version="3.7">
+				<location>
+					<physicalLocation authority="UkMaC">mmu</physicalLocation>
+				</location>
+			</mods>
+		</modsCollection>
+	</extension>
+</mods>
+nextResultSetPosition = 2
+Elapsed: 0.114013
+Z> See you later, alligator.
