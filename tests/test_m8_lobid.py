@@ -194,6 +194,32 @@ def test_import_matches_into_lab_db(tmp_path):
     lab.close()
 
 
+def test_import_matches_migrates_pre_m8_db(tmp_path):
+    """Regression 2026-10-10: import_matches raised 'table holdings has
+    no column named detail' against a lab m4.db that predated the M8
+    migration (live DB last written by pre-M8 jobs). Import must
+    self-migrate instead of assuming the schema."""
+    matches = tmp_path / "lobid_matches.db"
+    m8_lobid.join_dump(_join_fixture(tmp_path), {WS_A}, matches)
+
+    lab_path = tmp_path / "m4_pre_m8.db"
+    lab = m4.connect(lab_path)
+    lab.executescript(m5.SCHEMA)          # base schema: NO holdings.detail
+    lab.execute("INSERT INTO enrich_status (isbn13) VALUES (?)", (WS_A,))
+    lab.commit()
+    lab.close()
+
+    lab = m4.connect(lab_path)
+    stats = m8_lobid.import_matches(matches, lab)   # must not raise
+    assert stats["inserted"] == 1
+    cols = {r["name"] for r in lab.execute("PRAGMA table_info(holdings)")}
+    assert "detail" in cols
+    detail = lab.execute("SELECT detail FROM holdings WHERE "
+                         "institution='lobid'").fetchone()[0]
+    assert detail == "DE-5-13"
+    lab.close()
+
+
 def test_lobid_import_cli_smoke(tmp_path):
     dump = _join_fixture(tmp_path)
     matches = tmp_path / "lobid_matches.db"

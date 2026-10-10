@@ -170,6 +170,9 @@ def import_matches(matches_db: str | Path, conn: sqlite3.Connection) -> dict:
     the m4.db scratch pattern, then re-derive holdings/custody summary."""
     from . import m5
 
+    # M8 migration guard: live lab m4.db can predate holdings.detail
+    # (regression 2026-10-10 — import raised OperationalError before this)
+    m5.ensure_schema(conn)
     src = sqlite3.connect(f"file:{matches_db}?mode=ro", uri=True)
     src.row_factory = sqlite3.Row
     inserted = 0
