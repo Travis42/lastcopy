@@ -20,14 +20,21 @@ BUNDLE_DIR="${SLURM_SUBMIT_DIR:-/root/projects/lastcopy/slurm-v2}"
 cd "$BUNDLE_DIR" || exit 2; mkdir -p "$BUNDLE_DIR/logs"
 LC=/root/projects/lastcopy/.venv/bin/lastcopy
 SHARED_DB=/root/projects/lastcopy/data/m4.db
-DATA=/root/projects/lastcopy/data
 BUDGET="${BUDGET:-50000}"
 
 step() { echo "[$(date -Is)] $1"; }
 fail() { echo "[$(date -Is)] FAILED rc=$? at: $1"; exit 4; }
 
 step "1/5 scratch-copy"
-SCRATCH=$(mktemp -d /var/tmp/lc-m8.XXXXXX); trap 'rm -rf "$SCRATCH"' EXIT
+SCRATCH=$(mktemp -d /var/tmp/lc-m8.XXXXXX)
+# Keep scratch on failure (2026-10-10: an export arg bug wiped 17.8h of
+# harvest rows via rm-on-exit); removed only on success after write-back.
+on_exit() {
+    rc=$?
+    if [ "$rc" -eq 0 ]; then rm -rf "$SCRATCH"
+    else echo "[$(date -Is)] rc=$rc — scratch KEPT for recovery: $SCRATCH/m4.db"; fi
+}
+trap on_exit EXIT
 free_gb=$(df -BG --output=avail /var/tmp | tail -1 | tr -dc '0-9')
 [ "$free_gb" -lt 5 ] && { echo "refusing: ${free_gb}G free"; exit 3; }
 cp "$SHARED_DB" "$SCRATCH/m4.db" || exit 4
@@ -45,7 +52,7 @@ cd /root/projects/lastcopy
 "$LC" --db "$DB" union-holdings-report || fail union-holdings-report
 "$LC" --db "$DB" export-list --top 10000 \
     --csv docs/m4-list-top10k.csv --md docs/m4-list.md \
-    --editions-dump "$DATA/ol_dump_editions_latest.txt.gz" --workset || fail export
+    --workset || fail export
 cd "$BUNDLE_DIR"
 
 step "5/5 write-back (atomic, direct-I/O)"
